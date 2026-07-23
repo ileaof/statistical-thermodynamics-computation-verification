@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the book below."
+title: "Statistical Thermodynamics: Computation and Verification (companion code)"
+abstract: >-
+  Complete, executable and verified Python programs accompanying the textbook
+  "Statistical Thermodynamics: Theory, Computation, and Molecular Applications
+  -- A Computational Approach with Python". Every computational example is
+  provided in full, with each result checked against an exact value, a limiting
+  case, or an independent method.
+type: software
+version: 1.0.0
+date-released: 2026-07-23
+license: MIT
+authors:
+  - family-names: Ferreira
+    given-names: "I. L."
+repository-code: "https://github.com/ileaof/statistical-thermodynamics-computation-verification"
+url: "https://github.com/ileaof/statistical-thermodynamics-computation-verification"
+keywords:
+  - statistical thermodynamics
+  - statistical mechanics
+  - computational physics
+  - Monte Carlo
+  - molecular dynamics
+  - physical chemistry
+  - reproducibility
+preferred-citation:
+  type: book
+  title: "Statistical Thermodynamics: Theory, Computation, and Molecular Applications -- A Computational Approach with Python"
+  authors:
+    - family-names: Ferreira
+      given-names: "I. L."
+  year: 2026
