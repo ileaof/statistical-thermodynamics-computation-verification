@@ -21,7 +21,7 @@ Instead, report it privately:
 
 - Use GitHub's **[Report a vulnerability](https://github.com/ileaof/statistical-thermodynamics-computation-verification/security/advisories/new)**
   (Security → Advisories), or
-- email the maintainer at **ileaof@gmail.com** with the details and, if possible,
+- email the maintainer at **<ileao@ufpa.br>** with the details and, if possible,
   a way to reproduce.
 
 You can expect an acknowledgement within a few days. Once a fix is prepared, it

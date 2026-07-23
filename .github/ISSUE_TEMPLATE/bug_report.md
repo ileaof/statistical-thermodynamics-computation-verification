@@ -15,6 +15,7 @@ A clear description of what went wrong. If a verification check failed, paste th
 printed line showing the computed value versus the reference.
 
 **To reproduce**
+
 ```bash
 cd Chapter06_Quantum_Statistical_Thermodynamics
 python ex6_2_fermi.py
@@ -24,11 +25,13 @@ python ex6_2_fermi.py
 What you expected to happen (or the value the book reports).
 
 **Console output / traceback**
-```
+
+```text
 paste the full output or traceback here
 ```
 
 **Environment**
+
 - OS: [e.g. Windows 11, Ubuntu 22.04, macOS 14]
 - Python: [`python --version`]
 - NumPy / SciPy / Matplotlib versions: [`pip show numpy scipy matplotlib`]
