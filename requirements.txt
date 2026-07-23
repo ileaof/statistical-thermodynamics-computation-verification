@@ -1,0 +1,9 @@
+# Runtime dependencies for the example programs and the
+# statistical_thermodynamics library.
+#
+# The examples use only the standard scientific-Python stack.
+# Install with:  pip install -r requirements.txt
+
+numpy>=1.21
+scipy>=1.7
+matplotlib>=3.4
