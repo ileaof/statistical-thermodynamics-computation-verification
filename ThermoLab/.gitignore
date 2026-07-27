@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# Test / cache
+.pytest_cache/
+.cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# Generated figures from the plotting examples
+figures/
+*.png
+!docs/**/*.png
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Claude working state (not part of the package)
+.claude/

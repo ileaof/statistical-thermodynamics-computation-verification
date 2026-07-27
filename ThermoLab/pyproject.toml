@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thermolab"
+version = "0.1.0"
+description = "A unified, object-oriented Python framework for thermodynamic properties and cycle analysis, powered by ThermoPack."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "ThermoLab Contributors" }]
+keywords = [
+    "thermodynamics",
+    "thermopack",
+    "properties",
+    "CFD",
+    "cycle analysis",
+    "mixture",
+    "engineering",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "numpy>=1.20",
+    "scipy>=1.7",
+    "pandas>=1.3",
+    "matplotlib>=3.3",
+    "thermopack>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov"]
+coolprop = ["CoolProp>=6.4"]
+cantera = ["Cantera>=2.6"]
+
+[tool.setuptools.packages.find]
+include = ["thermolab*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # ThermoPack internals pass numpy arrays to c_double; harmless upstream noise.
+    "ignore::DeprecationWarning:thermopack",
+    # Our own gas-phase transport correlations intentionally warn once per phase.
+    "default::UserWarning:thermolab",
+]
