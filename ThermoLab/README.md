@@ -72,14 +72,14 @@ res.plot(diagram="ts")  # T-s diagram
 
 ## Supported fluids (this ThermoPack build)
 
-`H2O, CO2, N2, O2, Ar, H2, He, NH3, R134a, R32, R143a, R1234yf, R1234ze,
+`H2O, CO2, N2, O2, Ar, H2, He, NH3, CH4, R134a, R32, R143a, R1234yf, R1234ze,
 R12, R14, R23, R116, Benzene, CO, N2O, SO2, H2S, Kr, Xe, Ne, DME, R125`,
 plus the pseudo-fluid **`Air`** (resolved to a dry-air composition: N2 0.7884 /
 O2 0.2095 / Ar 0.0093 / CO2 0.0004 on GERG2008).
 
-`Gas("Methane")` raises `UnsupportedFluidError` with a clear message in this
-build — add another backend to extend coverage. `list_fluids()` lists what is
-available.
+A component absent from this build (for example `Gas("Propane")`) raises
+`UnsupportedFluidError` with a clear message — add another backend to extend
+coverage. `list_fluids()` lists what is available.
 
 ## Properties
 

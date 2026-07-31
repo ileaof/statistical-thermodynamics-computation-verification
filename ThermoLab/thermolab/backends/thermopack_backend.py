@@ -25,6 +25,24 @@ from ..units import R_GAS
 from .base import BaseBackend, MolarProperties, Phase, SaturationState
 
 # ---------------------------------------------------------------------------
+# Component-name translation.
+# ---------------------------------------------------------------------------
+# ThermoPack identifies light alkanes by carbon number (methane is "C1", not
+# "CH4"/"METHANE"), which differs from the formula/name a caller is likely to
+# type. Map the common aliases onto ThermoPack's own identifier so that
+# ``Gas("CH4")`` and ``Gas("methane")`` both resolve correctly.
+_TP_COMPONENT_ALIASES: dict[str, str] = {
+    "CH4": "C1",
+    "METHANE": "C1",
+}
+
+
+def _to_tp_id(name: str) -> str:
+    """Return the ThermoPack component identifier for a user-facing name."""
+    n = normalize_name(name)
+    return _TP_COMPONENT_ALIASES.get(n, n)
+
+# ---------------------------------------------------------------------------
 # Fluid classification (avoids any failing init -> process abort).
 # ---------------------------------------------------------------------------
 
@@ -38,12 +56,17 @@ _MEOS_OK: frozenset[str] = frozenset({
 # Fluids supported only via cubic EOS in this build (no MEOS parameters).
 _CUBIC_ONLY: frozenset[str] = frozenset({"R125", "DME"})
 
-# Everything the database knows about (MEOS or cubic).
-_SUPPORTED: frozenset[str] = _MEOS_OK | _CUBIC_ONLY
+# Fluids supported only via the GERG2008 multiparameter model. The default
+# NIST_MEOS reference has no parameters for these (a MEOS init aborts the
+# interpreter), but GERG2008 does — e.g. methane as "C1".
+_GERG_ONLY: frozenset[str] = frozenset({"C1"})
+
+# Everything the database knows about (MEOS, GERG2008, or cubic).
+_SUPPORTED: frozenset[str] = _MEOS_OK | _CUBIC_ONLY | _GERG_ONLY
 
 # Components eligible for the GERG2008 mixture model in this build.
 _GERG_CORE: frozenset[str] = frozenset({
-    "N2", "O2", "AR", "CO2", "H2O", "CO", "H2", "H2S", "HE",
+    "N2", "O2", "AR", "CO2", "H2O", "CO", "H2", "H2S", "HE", "C1",
 })
 
 # Phase label -> ThermoPack integer flag mapping (filled at runtime).
@@ -76,10 +99,12 @@ class ThermoPackBackend(BaseBackend):
     ) -> None:
         super().__init__(components, reference_state=reference_state, eos=eos)
 
-        norm = [normalize_name(c) for c in self.components]
+        # Translate user-facing names to ThermoPack component identifiers
+        # (e.g. methane "CH4" -> "C1") before any lookup or engine call.
+        tp_ids = [_to_tp_id(c) for c in self.components]
 
         # Validate every component is in the database (reject upfront).
-        missing = [c for c in norm if c not in _SUPPORTED]
+        missing = [c for c in tp_ids if c not in _SUPPORTED]
         if missing:
             raise UnsupportedFluidError(
                 ", ".join(missing),
@@ -93,10 +118,15 @@ class ThermoPackBackend(BaseBackend):
 
         # Pick the EOS deterministically.
         if self.nc == 1:
-            comp = norm[0]
-            chosen = "MEOS" if comp in _MEOS_OK else "SRK"
+            comp = tp_ids[0]
+            if comp in _MEOS_OK:
+                chosen = "MEOS"
+            elif comp in _GERG_ONLY:
+                chosen = "GERG2008"
+            else:
+                chosen = "SRK"
         else:
-            if all(c in _GERG_CORE for c in norm):
+            if all(c in _GERG_CORE for c in tp_ids):
                 chosen = "GERG2008"
             else:
                 chosen = "SRK"
@@ -106,7 +136,7 @@ class ThermoPackBackend(BaseBackend):
             chosen = eos.upper()
 
         self._eos_chosen = chosen
-        self._comps_str = ",".join(self.components)
+        self._comps_str = ",".join(tp_ids)
         self._engine = self._build_engine(chosen)
 
         # Phase flags from the live engine (authoritative).

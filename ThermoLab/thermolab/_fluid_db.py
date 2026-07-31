@@ -104,7 +104,7 @@ def get_sutherland(name: str) -> SutherlandCoeffs | None:
 # build (used for documentation / ``list_fluids``). Runtime availability is
 # always verified by attempting construction in the backend.
 KNOWN_SUPPORTED: tuple[str, ...] = (
-    "H2O", "CO2", "N2", "O2", "Ar", "H2", "He", "NH3",
+    "H2O", "CO2", "N2", "O2", "Ar", "H2", "He", "NH3", "CH4",
     "R134a", "R32", "R143a", "R1234yf", "R1234ze", "R12", "R14", "R23",
     "R116", "R125", "Benzene", "CO", "N2O", "SO2", "H2S", "Kr", "Xe", "Ne",
     "DME",

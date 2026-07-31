@@ -33,8 +33,8 @@ from thermolab import Gas, list_fluids
 from thermolab._fluid_db import FLUID_ALIASES, KNOWN_SUPPORTED
 
 # Classic gas-hydrate formers (structure I/II). Only those present in the
-# database will be listed; CH4/C2H6 etc. are included for reference but are
-# not in this ThermoPack build.
+# database will be listed; CH4 is supported, while heavier alkanes
+# (C2H6/C3H8/C4H10) are shown for reference but are not in this ThermoPack build.
 HYDRATE_FORMERS = {
     "CO2", "H2S", "N2", "O2", "Ar", "Xe", "Kr", "H2", "N2O",
     "CH4", "C2H6", "C3H8", "C4H10",

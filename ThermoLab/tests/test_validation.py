@@ -17,7 +17,7 @@ def test_supported_fluid_list():
 def test_unsupported_fluid_raises():
     from thermolab.exceptions import UnsupportedFluidError
     with pytest.raises(UnsupportedFluidError):
-        Gas("Methane")  # not in this ThermoPack build
+        Gas("Unobtanium")  # not a real component / absent from the database
 
 
 def test_n2_critical_point(nitrogen):

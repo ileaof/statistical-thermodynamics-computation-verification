@@ -23,8 +23,8 @@ fallback when MEOS parameters are unavailable; mixture → GERG2008 when every
 component is in the GERG core, else SRK. Pass `eos="SRK"` (or `"PR"`) to force
 a cubic.
 
-`Gas("Methane")` raises `UnsupportedFluidError` (absent from this ThermoPack
-build) — install another backend to extend coverage.
+A component absent from this build (for example `Gas("Propane")`) raises
+`UnsupportedFluidError` — install another backend to extend coverage.
 
 ## 2. State and the flash solver
 

@@ -5,7 +5,8 @@ chemical equilibrium. Combustion is handled as an atom-conserving composition
 change: the adiabatic flame temperature is found from a steady-flow first-law
 (isenthalpic) balance that pairs ThermoLab gas-phase sensible enthalpies with
 standard enthalpies of formation. Hydrogen is used because H2, O2, N2 and H2O
-are all GERG2008 components (methane is *not* in this ThermoPack build).
+are all GERG2008 components and the atom balance yields a single product (H2O),
+keeping the first-law demonstration compact.
 
 Stoichiometric reaction, per mole of H2, with air modelled as O2 + 3.76 N2::
 
