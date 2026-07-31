@@ -1,0 +1,11 @@
+species: Ar
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for Ar(g),
+  evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Molar Cp (J/mol/K) and absolute molar entropy S (J/mol/K) for ideal-gas Ar at 1 bar.
+  Monatomic: Cp = 5R/2 = 20.786 constant; S from Sackur-Tetrode. Engine reproduces these
+  to ~0%.
+T:  [298.15, 400.0, 600.0, 800.0, 1000.0, 1500.0, 2000.0]
+Cp: [20.7860, 20.7860, 20.7860, 20.7860, 20.7860, 20.7860, 20.7860]
+S:  [154.8446, 160.9530, 169.3810, 175.3607, 179.9990, 188.4270, 194.4068]

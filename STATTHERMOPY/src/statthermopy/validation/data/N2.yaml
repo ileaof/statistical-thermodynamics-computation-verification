@@ -1,0 +1,10 @@
+species: N2
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for N2(g),
+  evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Molar Cp and absolute molar entropy S (J/mol/K) for ideal-gas N2 at 1 bar.
+  Rigid-rotor/harmonic-oscillator model agrees to <1% on Cp, <0.2% on S over this range.
+T:  [298.15, 400.0, 600.0, 800.0, 1000.0, 1500.0, 2000.0]
+Cp: [29.1238, 29.2498, 30.1040, 31.4381, 32.6917, 34.8472, 35.9760]
+S:  [191.6089, 200.1811, 212.1763, 221.0171, 228.1706, 241.8799, 252.0742]

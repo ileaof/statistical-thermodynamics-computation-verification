@@ -1,0 +1,11 @@
+species: CH4
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for CH4(g),
+  evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Molar Cp and absolute molar entropy S (J/mol/K) for ideal-gas CH4 at 1 bar.
+  Spherical top with 9 oscillators (3N-6); engine agrees to <0.2% on both Cp and S — the
+  best-agreeing species in the set.
+T:  [298.15, 400.0, 600.0, 800.0, 1000.0, 1500.0, 2000.0]
+Cp: [35.6484, 40.5007, 52.2269, 62.9270, 71.7941, 86.6755, 94.3849]
+S:  [186.2547, 197.3542, 215.9876, 232.5186, 247.5478, 279.7538, 305.8671]

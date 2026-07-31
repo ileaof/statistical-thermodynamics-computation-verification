@@ -1,0 +1,8 @@
+species: C3H8
+source: "NASA Glenn 7-coefficient polynomial (McBride, Zehe & Gordon, NASA/TP-2002-211556, via Cantera nasa_gas.yaml), evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear asymmetric top. Reference from NASA Glenn polynomials (NIST WebBook has no Shomate for propane). Internal rotations are treated as harmonic oscillators, so deviations grow toward high T.
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [73.5902, 93.4868, 129.0646, 154.8406, 174.8373, 204.9761, 222.6110]
+S:  [270.3197, 294.7212, 339.6249, 380.5223, 417.2248, 494.3166, 555.9439]

@@ -1,0 +1,15 @@
+name: SO2
+formula: SO2
+molar_mass_gmol: 64.0638
+geometry: nonlinear
+n_atoms: 3
+symmetry_number: 2
+# Rotational constants A=2.027, B=0.344, C=0.293 cm-1 -> theta = hc*B/k
+rotational_temperatures: [2.918, 0.495, 0.422]
+vibrational_modes:
+  - {wavenumber_cm1: 1151.0, degeneracy: 1}    # nu1 symmetric stretch
+  - {wavenumber_cm1: 517.0, degeneracy: 1}     # nu2 bend
+  - {wavenumber_cm1: 1362.0, degeneracy: 1}    # nu3 asymmetric stretch
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Nonlinear, sigma=2."

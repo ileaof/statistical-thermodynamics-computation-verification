@@ -1,0 +1,15 @@
+name: H2S
+formula: H2S
+molar_mass_gmol: 34.0809
+geometry: nonlinear
+n_atoms: 3
+symmetry_number: 2
+# Rotational constants A=10.374, B=8.991, C=4.732 cm-1 -> theta = hc*B/k
+rotational_temperatures: [14.93, 12.94, 6.81]
+vibrational_modes:
+  - {wavenumber_cm1: 2615.0, degeneracy: 1}    # nu1 symmetric stretch
+  - {wavenumber_cm1: 1183.0, degeneracy: 1}    # nu2 bend
+  - {wavenumber_cm1: 2626.0, degeneracy: 1}    # nu3 asymmetric stretch
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Nonlinear, sigma=2."

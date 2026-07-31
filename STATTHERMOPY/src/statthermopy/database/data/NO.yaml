@@ -1,0 +1,14 @@
+name: NO
+formula: NO
+molar_mass_gmol: 30.0061
+geometry: linear
+n_atoms: 2
+symmetry_number: 1
+rotational_temperatures: [2.453]
+vibrational_modes:
+  - {wavenumber_cm1: 1904.2, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 2}
+  - {energy_cm1: 121.1, degeneracy: 2}
+  - {energy_cm1: 189.8, degeneracy: 2}
+references: "Herzberg; NIST CCCDB. Ground X2Pi_1/2 (g=2); 2Pi_3/2 at 121.1 cm-1 (g=2); higher term near 189.8 cm-1 (g=2)."

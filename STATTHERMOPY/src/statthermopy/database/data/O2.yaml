@@ -1,0 +1,14 @@
+name: O2
+formula: O2
+molar_mass_gmol: 31.9988
+geometry: linear
+n_atoms: 2
+symmetry_number: 2
+rotational_temperatures: [2.079]
+vibrational_modes:
+  - {wavenumber_cm1: 1580.19, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 3}
+  - {energy_cm1: 7918.1, degeneracy: 2}
+  - {energy_cm1: 13195.1, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Ground X3Sigma_g- (g=3); a1Delta_g at 7918 cm-1 (g=2); b1Sigma_g+ at 13195 cm-1 (g=1)."

@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.coverage.*
+*.so
+.idea/
+.vscode/
+*.xlsx
+*.csv
+*.json
+*.yaml
+# Package data (shipped): the molecular database and the validation references.
+!src/statthermopy/database/data/*.yaml
+!src/statthermopy/validation/data/*.yaml
+*.tex
+*.pdf
+docs/_build/
+.ipynb_checkpoints/
+
+# Stray pytest artefacts accidentally written to the project root
+Usersileao*

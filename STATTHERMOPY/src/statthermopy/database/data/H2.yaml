@@ -1,0 +1,12 @@
+name: H2
+formula: H2
+molar_mass_gmol: 2.01588
+geometry: linear
+n_atoms: 2
+symmetry_number: 2
+rotational_temperatures: [85.3]
+vibrational_modes:
+  - {wavenumber_cm1: 4401.21, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Ground X1Sigma_g+; theta_rot=85.3 K."

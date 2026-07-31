@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "statthermopy"
+version = "0.1.0"
+description = "Statistical thermodynamics in Python: thermodynamic properties from the molecular partition function, with no empirical correlations."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "I. L. Ferreira", email = "ileao@ufpa.br" }]
+keywords = [
+    "statistical thermodynamics",
+    "statistical mechanics",
+    "partition function",
+    "thermodynamics",
+    "ideal gas",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+excel = ["openpyxl>=3.1"]
+gui = ["PySide6>=6.6"]
+accel = ["numba>=0.60"]
+cuda = ["numba>=0.60"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "black>=24.3",
+    "sphinx>=7.2",
+    "openpyxl>=3.1",
+    "PySide6>=6.6",
+    "numba>=0.60",
+]
+
+[project.scripts]
+statthermopy = "statthermopy.cli.app:main"
+statthermopy-gui = "statthermopy.gui.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/statthermopy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["statthermopy"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "\\.\\.\\.",
+]

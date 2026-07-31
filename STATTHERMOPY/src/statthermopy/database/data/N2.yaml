@@ -1,0 +1,12 @@
+name: N2
+formula: N2
+molar_mass_gmol: 28.0134
+geometry: linear
+n_atoms: 2
+symmetry_number: 2
+rotational_temperatures: [2.878]
+vibrational_modes:
+  - {wavenumber_cm1: 2358.57, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Ground X1Sigma_g+; theta_rot=2.878 K."

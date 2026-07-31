@@ -1,0 +1,8 @@
+species: C2H6
+source: "NASA Glenn 7-coefficient polynomial (McBride, Zehe & Gordon, NASA/TP-2002-211556, via Cantera nasa_gas.yaml), evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear (D3d). Reference from NASA Glenn polynomials (NIST WebBook has no Shomate for ethane). C-C torsion is a hindered rotor; the harmonic-oscillator model overestimates its high-T contribution, so deviations grow toward high T.
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [52.5007, 65.1477, 89.3769, 107.9727, 122.6854, 145.2279, 158.4603]
+S:  [229.2201, 246.3924, 277.5144, 305.9249, 331.6050, 385.9860, 429.7597]

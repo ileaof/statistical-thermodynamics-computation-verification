@@ -1,0 +1,12 @@
+name: CO
+formula: CO
+molar_mass_gmol: 28.0101
+geometry: linear
+n_atoms: 2
+symmetry_number: 1
+rotational_temperatures: [2.77]
+vibrational_modes:
+  - {wavenumber_cm1: 2169.81, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Ground X1Sigma+; heteronuclear sigma=1."

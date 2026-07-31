@@ -1,0 +1,8 @@
+species: C2H4
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for C2H4(g), evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear (D2h). Rigid-rotor/harmonic-oscillator model agrees within a few percent over this range; deviations grow toward high T due to neglected anharmonicity.
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [42.8540, 53.0933, 70.6150, 83.9146, 93.8537, 110.1646, 118.3223]
+S:  [219.3223, 233.3548, 258.3396, 280.5695, 300.4137, 341.8769, 374.8117]

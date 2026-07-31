@@ -1,0 +1,16 @@
+name: NH3
+formula: NH3
+molar_mass_gmol: 17.0305
+geometry: nonlinear
+n_atoms: 4
+symmetry_number: 3
+# Symmetric top: A=6.196, B=C=9.943 cm-1 -> theta_i = hc*B_i/k
+rotational_temperatures: [8.91, 14.31, 14.31]
+vibrational_modes:
+  - {wavenumber_cm1: 3337.0, degeneracy: 1}    # nu1 symmetric stretch
+  - {wavenumber_cm1: 950.0, degeneracy: 1}     # nu2 umbrella
+  - {wavenumber_cm1: 3444.0, degeneracy: 2}    # nu3 degenerate stretch
+  - {wavenumber_cm1: 1627.0, degeneracy: 2}    # nu4 degenerate bend
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Symmetric top, sigma=3."

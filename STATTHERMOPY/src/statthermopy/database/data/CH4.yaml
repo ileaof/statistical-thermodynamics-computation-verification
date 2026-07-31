@@ -1,0 +1,16 @@
+name: CH4
+formula: CH4
+molar_mass_gmol: 16.0425
+geometry: nonlinear
+n_atoms: 5
+symmetry_number: 12
+# Spherical top: B = 5.241 cm-1 -> theta_rot = 7.54 K (three equal moments)
+rotational_temperatures: [7.54, 7.54, 7.54]
+vibrational_modes:
+  - {wavenumber_cm1: 2917.0, degeneracy: 1}    # nu1 (A1) symmetric stretch
+  - {wavenumber_cm1: 1534.0, degeneracy: 2}    # nu2 (E) doubly degenerate bend
+  - {wavenumber_cm1: 3019.0, degeneracy: 3}    # nu3 (F2) triply degenerate stretch
+  - {wavenumber_cm1: 1306.0, degeneracy: 3}    # nu4 (F2) triply degenerate bend
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Spherical top, sigma=12; 9 modes = 1+2+3+3."

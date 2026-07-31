@@ -1,0 +1,8 @@
+species: SO2
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for SO2(g), evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear. Rigid-rotor/harmonic-oscillator model agrees within a few percent over this range; deviations grow toward high T due to neglected anharmonicity.
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [39.8736, 43.5193, 49.0239, 52.4593, 54.4713, 57.0437, 58.2254]
+S:  [248.2104, 260.4487, 279.2123, 293.8287, 305.7705, 328.4197, 345.0088]

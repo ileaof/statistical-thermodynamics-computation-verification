@@ -1,0 +1,10 @@
+species: CO2
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for CO2(g),
+  evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Molar Cp and absolute molar entropy S (J/mol/K) for ideal-gas CO2 at 1 bar.
+  Linear triatomic with a doubly-degenerate bend; engine agrees to <1.5% on Cp, <0.3% on S.
+T:  [298.15, 400.0, 600.0, 800.0, 1000.0, 1500.0, 2000.0]
+Cp: [37.1300, 41.3362, 47.3179, 51.4405, 54.3047, 58.4045, 60.3363]
+S:  [213.7876, 225.3143, 243.2836, 257.4967, 269.3022, 292.1997, 309.2954]

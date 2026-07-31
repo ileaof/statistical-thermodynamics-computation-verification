@@ -1,0 +1,25 @@
+name: C2H4
+formula: C2H4
+molar_mass_gmol: 28.0532
+geometry: nonlinear
+n_atoms: 6
+symmetry_number: 4
+# Rotational constants A=4.828, B=1.001, C=0.828 cm-1 -> theta = hc*B/k
+rotational_temperatures: [6.95, 1.44, 1.19]
+# 12 fundamentals (D2h, no degenerate irreps): ag(4) + b1g(2) + b2u(3) + b3u(3)
+vibrational_modes:
+  - {wavenumber_cm1: 3019.0, degeneracy: 1}    # nu1 (ag)
+  - {wavenumber_cm1: 1623.0, degeneracy: 1}    # nu2 (ag) C=C stretch
+  - {wavenumber_cm1: 1342.0, degeneracy: 1}    # nu3 (ag)
+  - {wavenumber_cm1: 1023.0, degeneracy: 1}    # nu4 (ag)
+  - {wavenumber_cm1: 3106.0, degeneracy: 1}    # nu5 (b1g)
+  - {wavenumber_cm1: 826.0, degeneracy: 1}     # nu6 (b1g)
+  - {wavenumber_cm1: 3102.0, degeneracy: 1}    # nu7 (b2u)
+  - {wavenumber_cm1: 1236.0, degeneracy: 1}    # nu8 (b2u)
+  - {wavenumber_cm1: 949.0, degeneracy: 1}     # nu9 (b2u)
+  - {wavenumber_cm1: 2989.0, degeneracy: 1}    # nu10 (b3u)
+  - {wavenumber_cm1: 1443.0, degeneracy: 1}    # nu11 (b3u)
+  - {wavenumber_cm1: 943.0, degeneracy: 1}     # nu12 (b3u)
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Nonlinear (D2h), sigma=4; 12 modes all g=1."

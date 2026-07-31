@@ -1,0 +1,10 @@
+name: Ar
+formula: Ar
+molar_mass_gmol: 39.948
+geometry: monoatomic
+n_atoms: 1
+symmetry_number: 1
+vibrational_modes: []
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "NIST CCCDB; closed-shell ground state 1S0, g=1."

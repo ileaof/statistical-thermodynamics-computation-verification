@@ -1,0 +1,14 @@
+name: CO2
+formula: CO2
+molar_mass_gmol: 44.0095
+geometry: linear
+n_atoms: 3
+symmetry_number: 2
+rotational_temperatures: [0.5644]
+vibrational_modes:
+  - {wavenumber_cm1: 1388.0, degeneracy: 1}     # nu1 symmetric stretch (Sigma_g+)
+  - {wavenumber_cm1: 667.3, degeneracy: 2}      # nu2 bend (Pi_u, doubly degenerate)
+  - {wavenumber_cm1: 2349.0, degeneracy: 1}    # nu3 asymmetric stretch (Sigma_u+)
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Linear, sigma=2; theta_rot=0.5644 K."

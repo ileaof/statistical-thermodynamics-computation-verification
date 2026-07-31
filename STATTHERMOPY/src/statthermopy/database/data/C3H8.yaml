@@ -1,0 +1,42 @@
+name: C3H8
+formula: C3H8
+molar_mass_gmol: 44.0956
+geometry: nonlinear
+n_atoms: 11
+symmetry_number: 2
+# Propane is a low-symmetry asymmetric top; approximate rotational constants
+# A~0.475, B~0.280, C~0.230 cm-1 -> theta = hc*B/k.
+rotational_temperatures: [0.683, 0.403, 0.331]
+# 27 fundamentals (3N-6 = 27). Experimental gas-phase fundamentals from the Shimanouchi
+# compilation (1972) via the NIST WebBook vibrational energy levels table (C2v, all
+# non-degenerate). Includes the two low torsions (216, 268 cm-1). Oscillator count = 27.
+# Replaces earlier approximate grouped values, which overestimated Cp by ~7-10%.
+vibrational_modes:
+  - {wavenumber_cm1: 216.0, degeneracy: 1}     # a2 torsion
+  - {wavenumber_cm1: 268.0, degeneracy: 1}     # b2 torsion
+  - {wavenumber_cm1: 369.0, degeneracy: 1}     # a1 CCC deform
+  - {wavenumber_cm1: 748.0, degeneracy: 1}     # b2 CH2 rock
+  - {wavenumber_cm1: 869.0, degeneracy: 1}     # a1 CC str
+  - {wavenumber_cm1: 922.0, degeneracy: 1}     # b1 CH3 rock
+  - {wavenumber_cm1: 940.0, degeneracy: 1}     # a2 CH3 rock
+  - {wavenumber_cm1: 1054.0, degeneracy: 1}    # b1 CC str
+  - {wavenumber_cm1: 1158.0, degeneracy: 1}    # a1 CH3 rock
+  - {wavenumber_cm1: 1192.0, degeneracy: 1}    # b2 CH3 rock
+  - {wavenumber_cm1: 1278.0, degeneracy: 1}    # a2 CH2 twist
+  - {wavenumber_cm1: 1338.0, degeneracy: 1}    # b1 CH2 wag
+  - {wavenumber_cm1: 1378.0, degeneracy: 1}    # b1 CH3 s-deform
+  - {wavenumber_cm1: 1392.0, degeneracy: 1}    # a1 CH3 s-deform
+  - {wavenumber_cm1: 1451.0, degeneracy: 1}    # a2 CH3 d-deform
+  - {wavenumber_cm1: 1462.0, degeneracy: 1}    # a1 CH2 scis
+  - {wavenumber_cm1: 1464.0, degeneracy: 1}    # b1 CH3 d-deform
+  - {wavenumber_cm1: 1472.0, degeneracy: 1}    # b2 CH3 d-deform
+  - {wavenumber_cm1: 1476.0, degeneracy: 1}    # a1 CH3 d-deform
+  - {wavenumber_cm1: 2887.0, degeneracy: 2}    # a1 + b1 CH2/CH3 s-str
+  - {wavenumber_cm1: 2962.0, degeneracy: 1}    # a1 CH3 s-str
+  - {wavenumber_cm1: 2967.0, degeneracy: 1}    # a2 CH3 d-str
+  - {wavenumber_cm1: 2968.0, degeneracy: 2}    # b1 CH3 s-str + b2 CH2 a-str
+  - {wavenumber_cm1: 2973.0, degeneracy: 1}    # b2 CH3 d-str
+  - {wavenumber_cm1: 2977.0, degeneracy: 1}    # a1 CH3 d-str
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Shimanouchi (1972) gas-phase fundamentals via NIST WebBook; nonlinear asymmetric top, sigma=2; 27 oscillators."

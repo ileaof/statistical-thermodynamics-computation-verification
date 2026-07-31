@@ -1,0 +1,14 @@
+name: N2O
+formula: N2O
+molar_mass_gmol: 44.0128
+geometry: linear
+n_atoms: 3
+symmetry_number: 1
+rotational_temperatures: [0.603]
+vibrational_modes:
+  - {wavenumber_cm1: 1285.0, degeneracy: 1}    # nu1 N-N stretch
+  - {wavenumber_cm1: 589.0, degeneracy: 2}     # nu2 bend (doubly degenerate)
+  - {wavenumber_cm1: 2224.0, degeneracy: 1}    # nu3 N-O stretch
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Linear, heteronuclear sigma=1; theta_rot=0.603 K."

@@ -1,0 +1,16 @@
+name: C2H2
+formula: C2H2
+molar_mass_gmol: 26.0373
+geometry: linear
+n_atoms: 4
+symmetry_number: 2
+rotational_temperatures: [1.706]
+vibrational_modes:
+  - {wavenumber_cm1: 3374.0, degeneracy: 1}    # nu1 (Sigma_g+) C-H sym stretch
+  - {wavenumber_cm1: 1974.0, degeneracy: 1}    # nu2 (Sigma_g+) C-C stretch
+  - {wavenumber_cm1: 3289.0, degeneracy: 1}    # nu3 (Sigma_u+) C-H asym stretch
+  - {wavenumber_cm1: 612.0, degeneracy: 2}     # nu4 (Pi_g) bend (doubly degenerate)
+  - {wavenumber_cm1: 730.0, degeneracy: 2}     # nu5 (Pi_u) bend (doubly degenerate)
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Linear (D_inf_h), sigma=2; 7 modes = 1+1+1+2+2."

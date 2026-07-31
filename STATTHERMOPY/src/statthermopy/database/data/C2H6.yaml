@@ -1,0 +1,26 @@
+name: C2H6
+formula: C2H6
+molar_mass_gmol: 30.0690
+geometry: nonlinear
+n_atoms: 8
+symmetry_number: 6
+# Rotational constants A=2.681, B=C=0.666 cm-1 -> theta = hc*B/k
+rotational_temperatures: [3.86, 0.959, 0.959]
+# 18 fundamentals (D3d): 3a_g + 1a_u(torsion) + 3e_g(doubly degenerate) + 4e_u(doubly degenerate)
+# Oscillator count = 3 + 1 + 3*2 + 4*2 = 18. Values are approximate literature fundamentals
+# (NIST CCCDB / Herzberg); refine as needed.
+vibrational_modes:
+  - {wavenumber_cm1: 2954.0, degeneracy: 1}    # a_g CH3 sym stretch
+  - {wavenumber_cm1: 1468.0, degeneracy: 1}    # a_g CH3 deform
+  - {wavenumber_cm1: 995.0, degeneracy: 1}     # a_g C-C stretch
+  - {wavenumber_cm1: 289.0, degeneracy: 1}     # a_u torsion
+  - {wavenumber_cm1: 2954.0, degeneracy: 2}    # e_g CH3 stretch
+  - {wavenumber_cm1: 1468.0, degeneracy: 2}    # e_g CH3 deform
+  - {wavenumber_cm1: 1190.0, degeneracy: 2}    # e_g CH3 rock
+  - {wavenumber_cm1: 2985.0, degeneracy: 2}    # e_u CH3 stretch
+  - {wavenumber_cm1: 1460.0, degeneracy: 2}    # e_u CH3 deform
+  - {wavenumber_cm1: 822.0, degeneracy: 2}    # e_u CH3 rock
+  - {wavenumber_cm1: 2974.0, degeneracy: 2}    # e_u CH3 stretch
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Approximate fundamentals (NIST CCCDB / Herzberg). Nonlinear (D3d), sigma=6; 18 oscillators = 3+1+6+8."

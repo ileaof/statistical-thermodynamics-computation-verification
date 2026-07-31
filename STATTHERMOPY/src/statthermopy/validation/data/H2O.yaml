@@ -1,0 +1,11 @@
+species: H2O
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for H2O(g),
+  evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Molar Cp and absolute molar entropy S (J/mol/K) for ideal-gas H2O at 1 bar.
+  NIST gas-phase Shomate for H2O starts at 500 K, so this grid begins at 500 K (298.15/400 K
+  would require a separate low-T source). Engine agrees to <2% on Cp, <0.3% on S.
+T:  [500.0, 600.0, 800.0, 1000.0, 1500.0, 2000.0]
+Cp: [35.2184, 36.3179, 38.7365, 41.2656, 47.1086, 51.2048]
+S:  [206.5341, 213.0507, 223.8251, 232.7400, 250.6198, 264.7692]

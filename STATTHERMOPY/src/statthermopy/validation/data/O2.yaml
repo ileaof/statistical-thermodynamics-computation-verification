@@ -1,0 +1,10 @@
+species: O2
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for O2(g),
+  evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Molar Cp and absolute molar entropy S (J/mol/K) for ideal-gas O2 at 1 bar.
+  Electronic ground state 3Sigma_g- (g=3) plus low-lying terms included in the engine.
+T:  [298.15, 400.0, 600.0, 800.0, 1000.0, 1500.0, 2000.0]
+Cp: [29.3826, 30.1044, 32.1072, 33.7432, 34.8639, 36.5495, 37.7469]
+S:  [205.1473, 213.8736, 226.4508, 235.9209, 243.5788, 258.0678, 268.7477]

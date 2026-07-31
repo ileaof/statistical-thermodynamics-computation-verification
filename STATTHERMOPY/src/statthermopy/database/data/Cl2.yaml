@@ -1,0 +1,12 @@
+name: Cl2
+formula: Cl2
+molar_mass_gmol: 70.906
+geometry: linear
+n_atoms: 2
+symmetry_number: 2
+rotational_temperatures: [0.3508]
+vibrational_modes:
+  - {wavenumber_cm1: 559.7, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Ground X1Sigma_g+; theta_rot=0.3508 K."
