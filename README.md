@@ -37,6 +37,7 @@ results and figures to the last digit.
 - [Repository structure](#repository-structure)
 - [Chapter-by-chapter guide](#chapter-by-chapter-guide)
 - [The reusable library](#the-reusable-library)
+- [ThermoLab: applied thermodynamics toolkit](#thermolab-applied-thermodynamics-toolkit)
 - [Educational objectives](#educational-objectives)
 - [Intended audience](#intended-audience)
 - [Computational methodology](#computational-methodology)
@@ -288,6 +289,35 @@ C = st.solids.debye_heat_capacity(100.0, theta_D=343.0)
 | [`numerical_methods`](src/statistical_thermodynamics/numerical_methods.py) | Metropolis, autocorrelation, blocking, bootstrap |
 | [`plotting`](src/statistical_thermodynamics/plotting.py) | shared publication-quality Matplotlib styling |
 | [`utilities`](src/statistical_thermodynamics/utilities.py) | reproducible RNGs, error metrics, convergence fitting |
+
+## ThermoLab: applied thermodynamics toolkit
+
+[`ThermoLab/`](ThermoLab) is a companion project hosted in this repository: a
+unified, object-oriented framework for **thermodynamic properties** and
+**thermodynamic-cycle analysis**, powered by
+[ThermoPack](https://github.com/thermotools/thermopack) behind a
+backend-agnostic API. Where the chapter code above builds thermodynamics up from
+its statistical foundations, ThermoLab applies it to engineering fluids and
+cycles.
+
+It provides pure fluids and mixtures (GERG2008 / multiparameter EOS with cubic
+fallback), a state from any pair of `T, P, rho, v, h, s, u`, ~21 mass-based SI
+properties, T-s / P-h / P-v / Mollier diagrams, six cycles (Rankine, Brayton,
+refrigeration, Otto, Diesel), property tables and a CFD interface — with
+18 runnable examples and 70 tests.
+
+ThermoLab is **self-contained and installed separately**; it needs Python ≥ 3.11
+and `thermopack`, which the chapter examples do not:
+
+```bash
+cd ThermoLab
+pip install -e .
+pytest -q                            # 70 tests
+python examples/18_database.py       # which fluids this build supports
+```
+
+See [`ThermoLab/README.md`](ThermoLab/README.md) for the quickstart and
+[`ThermoLab/docs/USAGE.md`](ThermoLab/docs/USAGE.md) for the extended API guide.
 
 ## Educational objectives
 

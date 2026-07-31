@@ -31,6 +31,7 @@ statistical-thermodynamics-computation-verification/
 ├── tools/                        maintenance and build scripts
 ├── docs/                         extended documentation (this folder)
 ├── notebooks/                    optional interactive notebooks
+├── ThermoLab/                    companion applied-thermodynamics project
 └── .github/                      CI workflows and issue templates
 ```
 
@@ -90,7 +91,30 @@ library so that readers can reuse the same verified building blocks.
 | [`tools/`](../tools/) | `run_all_examples.py`, `build_all_figures.py`, `format_repository.py`, `clean_repository.py` |
 | [`docs/`](.) | installation, verification philosophy, theory notes, coding style, FAQ |
 | [`notebooks/`](../notebooks/) | optional Jupyter notebooks for interactive exploration |
+| [`ThermoLab/`](../ThermoLab/) | companion applied-thermodynamics project (properties and cycle analysis) |
 | [`.github/`](../.github/) | continuous-integration workflows and issue templates |
+
+### ThermoLab
+
+`ThermoLab/` is a **self-contained project** with its own `pyproject.toml`,
+`README.md`, `examples/`, `tests/` and `docs/`. It is installed independently
+(`cd ThermoLab && pip install -e .`) and requires Python ≥ 3.11 plus
+`thermopack`, neither of which the chapter examples need. Because it ships its
+own packaging and test configuration, it is deliberately kept outside `src/` and
+the root test suite:
+
+```
+ThermoLab/
+├── README.md · docs/USAGE.md · handoff.md
+├── pyproject.toml                 installable package metadata
+├── thermolab/                     the Python package (core API)
+│   ├── fluid.py  mixture.py  state.py  flash.py  properties.py
+│   ├── transport.py  units.py  tables.py  cfd.py  optimization.py
+│   ├── backends/                  BaseBackend ABC + ThermoPack backend
+│   └── cycles/                    rankine, brayton, refrigeration, otto, diesel
+├── examples/                      20 runnable scripts
+└── tests/                         pytest suite (70 tests)
+```
 
 ## Book chapters &harr; directories
 
