@@ -75,6 +75,10 @@ Tables). Every chapter closes with a summary, key equations, important concepts,
 engineering applications, common mistakes, solved problems, exercises,
 computational exercises, programming projects, and further reading.
 
+**Book:** *Statistical Thermodynamics: Theory, Computation, and Molecular
+Applications — A Computational Approach with Python*, I. L. Ferreira (2026).
+ISBN 979-8188751937.
+
 ## Guiding principle
 
 > *A computed number is an opinion until it has been verified.*
@@ -398,7 +402,8 @@ software. A machine-readable citation is provided in [`CITATION.cff`](CITATION.c
   title     = {Statistical Thermodynamics: Theory, Computation, and Molecular
                Applications --- A Computational Approach with Python},
   year      = {2026},
-  note      = {In preparation}
+  publisher = {Independently published},
+  isbn      = {979-8188751937}
 }
 
 @software{ferreira2026statthermo_code,
