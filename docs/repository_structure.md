@@ -32,6 +32,7 @@ statistical-thermodynamics-computation-verification/
 ├── docs/                         extended documentation (this folder)
 ├── notebooks/                    optional interactive notebooks
 ├── ThermoLab/                    companion applied-thermodynamics project
+├── STATTHERMOPY/                 companion first-principles property simulator
 └── .github/                      CI workflows and issue templates
 ```
 
@@ -92,6 +93,7 @@ library so that readers can reuse the same verified building blocks.
 | [`docs/`](.) | installation, verification philosophy, theory notes, coding style, FAQ |
 | [`notebooks/`](../notebooks/) | optional Jupyter notebooks for interactive exploration |
 | [`ThermoLab/`](../ThermoLab/) | companion applied-thermodynamics project (properties and cycle analysis) |
+| [`STATTHERMOPY/`](../STATTHERMOPY/) | companion first-principles property simulator (partition-function engine) |
 | [`.github/`](../.github/) | continuous-integration workflows and issue templates |
 
 ### ThermoLab
@@ -114,6 +116,34 @@ ThermoLab/
 │   └── cycles/                    rankine, brayton, refrigeration, otto, diesel
 ├── examples/                      20 runnable scripts
 └── tests/                         pytest suite (70 tests)
+```
+
+### STATTHERMOPY
+
+`STATTHERMOPY/` is a **self-contained simulator** that computes ideal-gas
+properties exclusively from the molecular partition function
+(`Q = Q_t·Q_r·Q_v·Q_e`), with no empirical correlations in the calculation path.
+Like ThermoLab it has its own `pyproject.toml`, tests and docs, installs
+independently (`cd STATTHERMOPY && pip install -e ".[dev]"`), and requires
+Python ≥ 3.11 (optional extras: `[gui]` for the PySide6 GUI, `[accel]` for the
+Numba/OpenMP/CUDA backends):
+
+```
+STATTHERMOPY/
+├── README.md · handoff.md · LICENSE · pyproject.toml
+├── src/statthermopy/
+│   ├── partition.py  thermodynamics.py  mixture.py  constants.py  units.py
+│   ├── core/          Molecule, Geometry, State, Contribution
+│   ├── modes/         translational · rotational · vibrational · electronic
+│   ├── database/      registry + data/*.yaml  (22 species)
+│   ├── validation/    reference + data/*.yaml  (NIST/JANAF Cp°, S°)
+│   ├── backend/       executor + numpy / numba / openmp / cuda
+│   ├── io/            exporters (CSV / JSON / YAML / Excel / LaTeX)
+│   ├── plots/  cli/  gui/            plotting · REPL+run · PySide6 GUI
+│   └── equilibrium/   architecture placeholder (future phase)
+├── examples/          runnable scripts + demo notebook + output figures
+├── tests/             pytest suite (268 tests, ~96% coverage)
+└── docs/              THEORY.md + Sphinx sources
 ```
 
 ## Book chapters &harr; directories

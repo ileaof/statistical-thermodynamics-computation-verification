@@ -38,6 +38,7 @@ results and figures to the last digit.
 - [Chapter-by-chapter guide](#chapter-by-chapter-guide)
 - [The reusable library](#the-reusable-library)
 - [ThermoLab: applied thermodynamics toolkit](#thermolab-applied-thermodynamics-toolkit)
+- [StatThermoPy: first-principles property simulator](#statthermopy-first-principles-property-simulator)
 - [Educational objectives](#educational-objectives)
 - [Intended audience](#intended-audience)
 - [Computational methodology](#computational-methodology)
@@ -322,6 +323,35 @@ python examples/18_database.py       # which fluids this build supports
 
 See [`ThermoLab/README.md`](ThermoLab/README.md) for the quickstart and
 [`ThermoLab/docs/USAGE.md`](ThermoLab/docs/USAGE.md) for the extended API guide.
+
+## StatThermoPy: first-principles property simulator
+
+[`STATTHERMOPY/`](STATTHERMOPY) is a companion simulator hosted in this
+repository: it computes the thermodynamic properties of ideal gases **exclusively
+from statistical mechanics** — via the molecular partition function
+`Q = Q_t·Q_r·Q_v·Q_e` — with **no empirical correlations** (no NASA/JANAF/Shomate/
+CoolProp/REFPROP) in the calculation path. It is the applied, first-principles
+engine behind the book's statistical-thermodynamics chapters.
+
+It provides `U, H, S, A, G, Cv, Cp, γ, μ` (molar and massic) and the total
+partition function for monoatomic through polyatomic gases and ideal-gas
+mixtures, from translational / rotational / vibrational / electronic modes; a
+22-species YAML database; automatic validation against embedded NIST/JANAF
+references; a scientific CLI; an optional Qt (PySide6) GUI; property-vs-T plots
+and CSV/JSON/YAML/Excel/LaTeX export; and pluggable NumPy / Numba / OpenMP / CUDA
+backends (same physics, 100×+ speedups). 268 tests, ~96 % coverage.
+
+StatThermoPy is **self-contained and installed separately** (Python ≥ 3.11):
+
+```bash
+cd STATTHERMOPY
+pip install -e ".[dev]"               # add ,gui and/or ,accel for the GUI / Numba
+pytest -q                              # 268 tests
+statthermopy run --gas N2 --T 298.15   # Cp_m = 29.1129 J/mol/K, purely from Q
+```
+
+See [`STATTHERMOPY/README.md`](STATTHERMOPY/README.md) for the full guide,
+features, screenshots and roadmap.
 
 ## Educational objectives
 
