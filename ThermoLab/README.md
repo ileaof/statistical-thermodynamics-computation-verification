@@ -1,5 +1,7 @@
 # ThermoLab
 
+**Author:** I. L. Ferreira &lt;<ileao@ufpa.br>&gt;
+
 A unified, object-oriented Python framework for **thermodynamic properties** and
 **thermodynamic-cycle analysis**, powered by [ThermoPack](https://github.com/thermotools/thermopack)
 behind a single modern, backend-agnostic API.
@@ -190,6 +192,26 @@ flash solver, `State`, cycles, plotting, and tables all work unchanged.
 See [`docs/USAGE.md`](docs/USAGE.md) for the extended guide, and
 [`handoff.md`](handoff.md) for integration notes and known limitations.
 
+## Citation
+
+If you use ThermoLab in your work, please cite:
+
+> I. L. Ferreira, *ThermoLab: a unified Python framework for thermodynamic
+> properties and cycle analysis*, 2026.
+> <https://github.com/ileaof/statistical-thermodynamics-computation-verification>
+
+```bibtex
+@software{ferreira2026thermolab,
+  author  = {Ferreira, I. L.},
+  title   = {ThermoLab: a unified Python framework for thermodynamic
+             properties and cycle analysis},
+  year    = {2026},
+  version = {0.1.0},
+  url     = {https://github.com/ileaof/statistical-thermodynamics-computation-verification}
+}
+```
+
 ## License
 
-MIT.
+Released under the [MIT License](LICENSE) &mdash; Copyright &copy; 2026
+I. L. Ferreira.

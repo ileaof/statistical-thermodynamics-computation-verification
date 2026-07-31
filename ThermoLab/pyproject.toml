@@ -9,7 +9,7 @@ description = "A unified, object-oriented Python framework for thermodynamic pro
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "ThermoLab Contributors" }]
+authors = [{ name = "I. L. Ferreira", email = "ileao@ufpa.br" }]
 keywords = [
     "thermodynamics",
     "thermopack",
