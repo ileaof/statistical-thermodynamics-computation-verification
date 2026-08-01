@@ -179,7 +179,58 @@ oscillator). Degenerate modes (e.g. CO2 bend g=2, CH4 ν3 g=3) are counted throu
 
 **Limitations**: harmonic approximation — neglects anharmonicity, mode coupling, and
 zero-point-energy shifts. Adequate up to a few thousand K for most species; above that the
-heat capacity is overestimated slightly.
+heat capacity is overestimated slightly. Low-frequency torsions about single bonds are better
+described as *hindered internal rotors* (§4b) than as harmonic oscillators.
+
+---
+
+## 4b. Hindered internal rotation
+
+A torsion about a single bond (e.g. a methyl top in ethane or propane) is not well approximated
+by a harmonic oscillator: as temperature rises the motion crosses over from libration in a well
+to nearly free rotation over the barrier, and its heat capacity rolls **down** from R (harmonic)
+toward R/2 (free rotor) rather than saturating at R. StatThermoPy treats each such mode with a
+one-dimensional hindered-rotor model. For an n-fold symmetric potential
+
+$$V(\varphi) = \tfrac{1}{2} V_n\,[1 - \cos(n\varphi)],$$
+
+the torsional Hamiltonian is the Mathieu operator
+
+$$\hat H = -F\,\frac{d^2}{d\varphi^2} + \tfrac{1}{2}V_n[1-\cos(n\varphi)], \qquad
+F = \frac{\hbar^2}{2 I_r},$$
+
+with reduced moment of inertia I_r and internal-rotation constant F. Its eigenvalues are obtained
+**exactly** (to basis truncation) by diagonalising Ĥ in the free-rotor basis |m⟩ = e^{imφ}/√(2π),
+where ⟨m|Ĥ|m⟩ = F m² + V_n/2 and ⟨m|Ĥ|m±n⟩ = −V_n/4. From the resulting levels ε_i (referenced to
+the ground level, matching the v = 0 vibrational convention),
+
+$$q_\text{ir} = \frac{1}{\sigma_\text{int}}\sum_i e^{-\varepsilon_i / k_B T},$$
+
+with σ_int the internal symmetry number (3 for a methyl top). The thermodynamic functions follow
+from the level-distribution moments (x_i = ε_i/k_B T):
+
+- U_m = R T ⟨x⟩,
+- Cv_m = R (⟨x²⟩ − ⟨x⟩²),
+- S_m = R (ln q_ir + ⟨x⟩),
+- A_m = −R T ln q_ir,
+
+summed over every rotor. The model reproduces both limits automatically: as V_n → 0 it becomes
+the free internal rotor q = (8π³ I_r k_B T)^{1/2}/(σ_int h) with Cv → R/2, and as V_n → ∞ it
+becomes a harmonic oscillator of the small-oscillation frequency ṽ = n√(F V_n) with Cv → R. Only
+the two spectroscopic constants F and V_n enter — no empirical property correlation — so the
+engine remains pure statistical mechanics. Each rotor replaces one 3N−6 (or 3N−5) harmonic
+oscillator; in the reported four-factor partition function it is folded into Q_v (the internal
+nuclear-motion factor).
+
+Applied to the C–C torsion of **ethane** (V₃ = 1024 cm⁻¹, F = 10.7 cm⁻¹, σ_int = 3) the Mathieu
+ladder reproduces the observed ~289 cm⁻¹ torsional fundamental; the two methyl torsions of
+**propane** (V₃ = 1190 cm⁻¹, F = 5.3 cm⁻¹, σ_int = 3, treated as two independent identical rotors)
+are handled the same way. Relative to the harmonic-torsion treatment this leaves propane's C_p
+essentially exact across 298–2000 K (mean error ≈ 0.3 %) and keeps ethane within a few percent.
+
+**Limitations**: one-dimensional and uncoupled — top–top and top–frame coupling, and the change
+of I_r with the overall rotation, are neglected. The potential is a single cosine term (only the
+leading n-fold barrier V_n); higher harmonics are not represented.
 
 ---
 

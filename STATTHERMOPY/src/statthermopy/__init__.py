@@ -25,13 +25,14 @@ from .core import (
     Contribution,
     ElectronicLevel,
     Geometry,
+    InternalRotor,
     Molecule,
     ResolvedState,
     State,
     VibrationalMode,
 )
 from .mixture import IdealGasMixture, MixtureProperties
-from .modes import Electronic, Rotational, Translational, Vibrational
+from .modes import Electronic, HinderedRotor, Rotational, Translational, Vibrational
 from .partition import PartitionFunction, PartitionValues
 from .thermodynamics import ThermoProperties, Thermodynamics
 
@@ -47,6 +48,7 @@ __all__ = [
     "Geometry",
     "Molecule",
     "VibrationalMode",
+    "InternalRotor",
     "State",
     "ResolvedState",
     "PartitionFunction",
@@ -58,6 +60,7 @@ __all__ = [
     "Translational",
     "Rotational",
     "Vibrational",
+    "HinderedRotor",
     "Electronic",
     "get",
     "list_molecules",

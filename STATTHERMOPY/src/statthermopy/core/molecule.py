@@ -22,7 +22,7 @@ from enum import Enum
 
 from ..units import molar_mass_gmol_to_kgmol
 
-__all__ = ["Geometry", "VibrationalMode", "ElectronicLevel", "Molecule"]
+__all__ = ["Geometry", "VibrationalMode", "InternalRotor", "ElectronicLevel", "Molecule"]
 
 
 class Geometry(str, Enum):
@@ -53,6 +53,54 @@ class VibrationalMode:
             raise ValueError("Vibrational degeneracy must be >= 1.")
         if self.wavenumber_cm1 <= 0:
             raise ValueError("Vibrational wavenumber must be > 0 cm^-1.")
+
+
+@dataclass(frozen=True)
+class InternalRotor:
+    """A one-dimensional hindered internal rotor (e.g. a methyl-top torsion).
+
+    The rotor moves in an ``n``-fold symmetric potential
+    ``V(φ) = (V_n / 2) [1 - cos(n φ)]`` with kinetic term ``F P²`` where
+    ``F = ħ² / (2 I_r)`` is the internal-rotation constant and ``I_r`` the reduced moment
+    of inertia. The torsional eigenvalues are obtained by diagonalising this (Mathieu)
+    Hamiltonian in the free-rotor basis; see
+    :class:`~statthermopy.modes.hindered_rotor.HinderedRotor`.
+
+    Both constants are stored in cm^-1 (the spectroscopic convention), exactly as
+    vibrational wavenumbers are.
+
+    Attributes
+    ----------
+    rotation_constant_cm1 : float
+        Internal-rotation constant ``F = ħ² / (2 I_r)`` in cm^-1.
+    barrier_cm1 : float
+        Hindering-potential barrier height ``V_n`` in cm^-1.
+    symmetry : int
+        Internal symmetry number ``σ_int`` (3 for a methyl top). Divides the rotor
+        partition function.
+    n_minima : int
+        Potential periodicity ``n`` (number of equivalent minima; 3 for a methyl top).
+    degeneracy : int
+        Number of identical, independent rotors sharing these constants (default 1).
+    """
+
+    rotation_constant_cm1: float
+    barrier_cm1: float
+    symmetry: int = 3
+    n_minima: int = 3
+    degeneracy: int = 1
+
+    def __post_init__(self) -> None:
+        if self.rotation_constant_cm1 <= 0:
+            raise ValueError("Internal-rotation constant F must be > 0 cm^-1.")
+        if self.barrier_cm1 < 0:
+            raise ValueError("Internal-rotation barrier must be >= 0 cm^-1.")
+        if self.symmetry < 1:
+            raise ValueError("Internal symmetry number must be >= 1.")
+        if self.n_minima < 1:
+            raise ValueError("Potential periodicity n must be >= 1.")
+        if self.degeneracy < 1:
+            raise ValueError("Internal-rotor degeneracy must be >= 1.")
 
 
 @dataclass(frozen=True)
@@ -100,7 +148,12 @@ class Molecule:
         Principal moments of inertia in kg m^2. Empty for monoatomic, length 1 for linear,
         length 3 for nonlinear (ordered ``I_A <= I_B <= I_C``).
     vibrational_modes : tuple[VibrationalMode, ...]
-        Vibrational modes. Empty for monoatomic; ``3N-5`` for linear; ``3N-6`` for nonlinear.
+        Harmonic vibrational modes. Empty for monoatomic. Together with any internal
+        rotors the internal-motion count is ``3N-5`` for linear and ``3N-6`` for nonlinear.
+    internal_rotors : tuple[InternalRotor, ...]
+        Hindered internal rotors (e.g. methyl torsions). Each rotor replaces one internal
+        degree of freedom that would otherwise be counted as a harmonic vibration, so the
+        oscillator count plus the rotor count must still equal ``3N-5`` / ``3N-6``.
     electronic_levels : tuple[ElectronicLevel, ...]
         Electronic terms with the ground state first (energy 0). Defaults to a single
         non-degenerate ground state if not specified.
@@ -114,6 +167,7 @@ class Molecule:
     symmetry_number: int = 1
     moments_of_inertia: tuple[float, ...] = field(default_factory=tuple)
     vibrational_modes: tuple[VibrationalMode, ...] = field(default_factory=tuple)
+    internal_rotors: tuple[InternalRotor, ...] = field(default_factory=tuple)
     electronic_levels: tuple[ElectronicLevel, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
@@ -125,11 +179,15 @@ class Molecule:
         if self.symmetry_number < 1:
             raise ValueError("symmetry_number must be >= 1.")
 
+        n_rot = sum(r.degeneracy for r in self.internal_rotors)
+
         if self.geometry is Geometry.MONOATOMIC:
             if self.n_atoms != 1:
                 raise ValueError("Monoatomic molecules must have n_atoms == 1.")
-            if self.moments_of_inertia or self.vibrational_modes:
-                raise ValueError("Monoatomic molecules have no rotation or vibration.")
+            if self.moments_of_inertia or self.vibrational_modes or self.internal_rotors:
+                raise ValueError(
+                    "Monoatomic molecules have no rotation, vibration or internal rotation."
+                )
         elif self.geometry is Geometry.LINEAR:
             if self.n_atoms < 2:
                 raise ValueError("Linear molecules must have n_atoms >= 2.")
@@ -137,10 +195,10 @@ class Molecule:
                 raise ValueError("Linear molecules need exactly one moment of inertia.")
             expected = 3 * self.n_atoms - 5
             n_osc = sum(m.degeneracy for m in self.vibrational_modes)
-            if self.vibrational_modes and n_osc != expected:
+            if (self.vibrational_modes or self.internal_rotors) and n_osc + n_rot != expected:
                 raise ValueError(
-                    f"Linear molecule {self.name}: expected {expected} vibrational oscillators "
-                    f"(3N-5), got {n_osc} (sum of degeneracies)."
+                    f"Linear molecule {self.name}: expected {expected} internal modes (3N-5), "
+                    f"got {n_osc} oscillators + {n_rot} internal rotors = {n_osc + n_rot}."
                 )
         elif self.geometry is Geometry.NONLINEAR:
             if self.n_atoms < 3:
@@ -149,10 +207,10 @@ class Molecule:
                 raise ValueError("Nonlinear molecules need exactly three moments of inertia.")
             expected = 3 * self.n_atoms - 6
             n_osc = sum(m.degeneracy for m in self.vibrational_modes)
-            if self.vibrational_modes and n_osc != expected:
+            if (self.vibrational_modes or self.internal_rotors) and n_osc + n_rot != expected:
                 raise ValueError(
-                    f"Nonlinear molecule {self.name}: expected {expected} vibrational "
-                    f"oscillators (3N-6), got {n_osc} (sum of degeneracies)."
+                    f"Nonlinear molecule {self.name}: expected {expected} internal modes (3N-6), "
+                    f"got {n_osc} oscillators + {n_rot} internal rotors = {n_osc + n_rot}."
                 )
 
         if not self.electronic_levels:
@@ -192,6 +250,11 @@ class Molecule:
     def n_vibrational_modes(self) -> int:
         """Total number of vibrational oscillators (counting degeneracies)."""
         return sum(m.degeneracy for m in self.vibrational_modes)
+
+    @property
+    def n_internal_rotors(self) -> int:
+        """Total number of hindered internal rotors (counting degeneracies)."""
+        return sum(r.degeneracy for r in self.internal_rotors)
 
     @property
     def ground_state_degeneracy(self) -> int:

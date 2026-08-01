@@ -47,13 +47,20 @@ def test_diatomic_symmetry_numbers():
 
 
 def test_vibrational_oscillator_counts():
-    # 3N-5 linear, 3N-6 nonlinear
+    # 3N-5 linear, 3N-6 nonlinear; internal rotors (ethane/propane methyl torsions) count
+    # toward the total but are carried separately from the harmonic oscillators.
     assert get("N2").n_vibrational_modes == 1
     assert get("CO2").n_vibrational_modes == 4   # 1+2+1
     assert get("H2O").n_vibrational_modes == 3
     assert get("CH4").n_vibrational_modes == 9   # 1+2+3+3
-    assert get("C2H6").n_vibrational_modes == 18
-    assert get("C3H8").n_vibrational_modes == 27
+    # C2H6: 17 harmonic oscillators + 1 internal rotor = 18 = 3N-6
+    assert get("C2H6").n_vibrational_modes == 17
+    assert get("C2H6").n_internal_rotors == 1
+    assert get("C2H6").n_vibrational_modes + get("C2H6").n_internal_rotors == 18
+    # C3H8: 25 harmonic oscillators + 2 internal rotors = 27 = 3N-6
+    assert get("C3H8").n_vibrational_modes == 25
+    assert get("C3H8").n_internal_rotors == 2
+    assert get("C3H8").n_vibrational_modes + get("C3H8").n_internal_rotors == 27
 
 
 def test_moments_of_inertia_counts():

@@ -17,6 +17,8 @@ YAML schema (optional fields in *italics*)::
     rotational_temperatures: [2.878]      # K  (alternative: moments_of_inertia in kg m^2)
     vibrational_modes:                    # list of {wavenumber_cm1, degeneracy}
       - {wavenumber_cm1: 2358.57, degeneracy: 1}
+    internal_rotors:                      # optional; each replaces one 3N-6/3N-5 oscillator
+      - {rotation_constant_cm1: 10.7, barrier_cm1: 1024.0, symmetry: 3, n_minima: 3, degeneracy: 1}
     electronic_levels:                    # list of {energy_cm1, degeneracy} (ground at 0)
       - {energy_cm1: 0.0, degeneracy: 1}
     references: "McQuarrie, Statistical Mechanics; NIST CCCDB"
@@ -32,7 +34,13 @@ from pathlib import Path
 import yaml
 
 from ..constants import h, k_B
-from ..core.molecule import ElectronicLevel, Geometry, Molecule, VibrationalMode
+from ..core.molecule import (
+    ElectronicLevel,
+    Geometry,
+    InternalRotor,
+    Molecule,
+    VibrationalMode,
+)
 
 __all__ = ["get", "list_molecules", "load_molecule", "MoleculeRegistry"]
 
@@ -66,6 +74,16 @@ def load_molecule(data: dict) -> Molecule:
         VibrationalMode(float(m["wavenumber_cm1"]), int(m.get("degeneracy", 1)))
         for m in (data.get("vibrational_modes") or [])
     )
+    rotors = tuple(
+        InternalRotor(
+            rotation_constant_cm1=float(r["rotation_constant_cm1"]),
+            barrier_cm1=float(r["barrier_cm1"]),
+            symmetry=int(r.get("symmetry", 3)),
+            n_minima=int(r.get("n_minima", 3)),
+            degeneracy=int(r.get("degeneracy", 1)),
+        )
+        for r in (data.get("internal_rotors") or [])
+    )
     elec_levels = tuple(
         ElectronicLevel(float(l["energy_cm1"]), int(l.get("degeneracy", 1)))
         for l in (data.get("electronic_levels") or [])
@@ -80,6 +98,7 @@ def load_molecule(data: dict) -> Molecule:
         symmetry_number=int(data.get("symmetry_number", 1)),
         moments_of_inertia=moments,
         vibrational_modes=vib_modes,
+        internal_rotors=rotors,
         electronic_levels=elec_levels,
     )
 

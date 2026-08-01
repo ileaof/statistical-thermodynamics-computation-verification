@@ -1,6 +1,10 @@
-# StatThermoPy — Handoff (Fase 5 complete)
+# StatThermoPy — Handoff (Phase 6 complete)
 
 > Snapshot before autocompact. Read this first when resuming.
+>
+> **Phase 6 (hindered internal rotation) is complete and verified** — see the section at the end.
+> A separate GUI fix (Plot tab ignored Mixture mode → plotted argon as a flat line) is also done:
+> `plots.plot_mixture_property` + `_on_plot`/`_sync_plot_props` in `gui/mainwindow.py`.
 
 ## Where things stand
 
@@ -258,6 +262,64 @@ toggle-via-menu, helpers; plus ruff fixes); `README.md` (GUI section).
 (`statthermopy.gui` not in `sys.modules`). Visual check (display required): buttons clearly
 contrast, accent primaries, hover/pressed states, rounded corners, View → Theme toggles
 light↔dark live with canvas facecolors following. No new heavy deps; PySide6 stays optional.
+
+## Phase 6 — hindered internal rotation (complete)
+
+Added a physically rigorous 1-D **hindered internal-rotor** treatment for single-bond torsions,
+replacing the harmonic-oscillator approximation of the methyl torsions in **ethane** and
+**propane**. Still pure statistical mechanics: only two spectroscopic constants per rotor
+(internal-rotation constant F and barrier V_n) — no empirical property correlation.
+
+**Physics (`modes/hindered_rotor.py`, new):** solves the Mathieu Hamiltonian
+`Ĥ = -F d²/dφ² + (V_n/2)(1-cos nφ)` by diagonalising it in the free-rotor basis |m⟩ (2·100+1
+states), diagonal `F m² + V_n/2`, off-diagonal (m,m±n) `-V_n/4`, via `np.linalg.eigvalsh`.
+Levels are referenced to the ground level (matches the harmonic v=0 zero). Partition function
+`q = (1/σ_int) Σ exp(-ε_i/kT)`; thermodynamics from the level-distribution moments
+(`U=RT⟨x⟩`, `Cv=R(⟨x²⟩-⟨x⟩²)`, `S=R(ln q+⟨x⟩)`, `A=-RT ln q`), summed over rotors (× degeneracy).
+`HinderedRotor(())` is a null mode → molecules without rotors are byte-for-byte unaffected.
+Verified limits: free-rotor q matches `√(8π³ I_r kT)/(σh)` to 1e-4 and Cv→R/2; high-barrier→HO;
+ethane ladder reproduces the observed ~289 cm⁻¹ torsional fundamental (level index 3 — the 3-fold
+symmetry makes each torsional level a near-degenerate triplet with ~0.006 cm⁻¹ tunnelling split).
+
+**Data model:** new frozen `InternalRotor` dataclass (`core/molecule.py`) —
+`rotation_constant_cm1` (F), `barrier_cm1` (V_n), `symmetry` (σ_int, default 3), `n_minima`
+(default 3), `degeneracy`. `Molecule.internal_rotors` tuple field + `n_internal_rotors`. **DOF
+validation changed**: nonlinear/linear now require `n_osc + n_rot == 3N-6 / 3N-5` (not just
+`n_osc`); monatomic rejects rotors. Exported at top level and from `core`. YAML loader parses an
+`internal_rotors:` list.
+
+**Wiring:** `PartitionFunction` builds `self.internal_rotation = HinderedRotor(mol.internal_rotors)`
+and **folds it into Q_v** — `evaluate()` adds its `ln_q` to `lnQv`; `contributions()["vibrational"]`
+is harmonic+rotor via `_vibrational_contribution` (name kept "vibrational"). So the reported
+4-factor Q (Qt/Qr/Qv/Qe) and the 4-key contributions dict are **unchanged** — GUI 5-row modes
+table and exporters untouched. `modes` property exposes `internal_rotation` as a 5th entry
+(test_coverage updated).
+
+**Backend:** accelerated `molar_property_grid` kernels model only harmonic vibration, so
+`_has_internal_rotors(mol)` (in `numba_backend.py`, imported by openmp/cuda) makes all three
+return `None` → exact per-T Python fallback for C2H6/C3H8. Zero physics duplication; numba grid
+matches numpy to 1e-10 (tested).
+
+**Database:** `C2H6.yaml` — dropped the 289 cm⁻¹ a_u torsion (17 oscillators) + 1 rotor
+(F=10.7, V3=1024 cm⁻¹, σ=3). `C3H8.yaml` — dropped the 216 & 268 cm⁻¹ torsions (25 oscillators) + 1 rotor entry degeneracy 2 (F=5.3, V3=1190 cm⁻¹, σ=3, two independent identical methyl tops;
+top-top coupling neglected). Both still sum to 3N-6.
+
+**Validation impact (vs old harmonic MAE):** C3H8 Cp **2.28 % → 0.29 %** (near-exact 298–2000 K);
+C3H8 S 0.55 % → 1.26 % (≈constant +1 % entropy offset); C2H6 Cp 2.29 % → 2.54 % (systematic
+−1…−4 % under-prediction, worst at 600–800 K — residual anharmonicity, not the torsion); C2H6 S
+0.91 % → 0.75 %. All four well within the 5 % gate. Constants are literature spectroscopic values
+(reproduce the observed torsional fundamentals); **not** fitted to Cp/S — keeping the core
+first-principles.
+
+**Tests:** `tests/test_hindered_rotor.py` (new, 16 tests, module at 100 %): free-rotor Cv/q
+limits, high-barrier/low-T freeze-out, torsional fundamental, `Cv==dU/dT` finite-diff,
+`U==RT² dlnq/dT`, degeneracy==independent-rotors, null mode, high-T Cv below HO, DOF split for
+C2H6/C3H8, ethane compute sanity, fold-into-vibrational, monatomic-rejects-rotor, param
+validation, numba fallback+match. Updated `test_database.py::test_vibrational_oscillator_counts`
+(17/25 + rotor counts) and `test_coverage.py::test_partition_modes_dict` (5 keys).
+
+**Verification:** `pytest --cov=statthermopy` → all pass, **96 %** (hindered_rotor 100 %).
+`import statthermopy` still keeps numba/GUI lazy. New files ruff-clean.
 
 ## Plan file
 

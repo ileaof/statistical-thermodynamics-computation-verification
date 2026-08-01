@@ -431,7 +431,9 @@ def test_partition_modes_dict():
     n2 = get("N2")
     pf = Thermodynamics(n2, State(T=300.0, P=1e5)).partition
     md = pf.modes
-    assert set(md.keys()) == {"translational", "rotational", "vibrational", "electronic"}
+    assert set(md.keys()) == {
+        "translational", "rotational", "vibrational", "internal_rotation", "electronic",
+    }
 
 
 # -- argparse one-shot mode -------------------------------------------------

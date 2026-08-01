@@ -32,6 +32,17 @@ __all__ = ["NumbaBackend"]
 # Spectroscopic spec extraction (shared with OpenMP/CUDA backends)
 # ---------------------------------------------------------------------------
 
+def _has_internal_rotors(mol) -> bool:
+    """True if the molecule carries hindered internal rotors.
+
+    The compiled ``molar_property_grid`` kernels model only harmonic vibrations, so molecules
+    with internal rotation must fall back to the exact per-temperature Python path (which does
+    include the :class:`~statthermopy.modes.hindered_rotor.HinderedRotor` mode). Returning
+    ``None`` from ``molar_property_grid`` triggers that fallback.
+    """
+    return bool(getattr(mol, "internal_rotors", ()))
+
+
 def _extract_spec(mol) -> dict:
     """Flatten a :class:`~statthermopy.core.molecule.Molecule` into Numba-friendly arrays/scalars.
 
@@ -294,6 +305,8 @@ class NumbaBackend(Backend):
     def molar_property_grid(self, mol, T_array, P, use_quantum, cutoff=150):
         from ..constants import N_A, R, h, k_B
 
+        if _has_internal_rotors(mol):
+            return None  # internal rotors aren't in the kernel; use the per-T Python path
         _q_rot_jit, _props_at_T, molar_props_jit = _kernels()
         spec = _extract_spec(mol)
         T_arr = np.asarray(T_array, dtype=np.float64)

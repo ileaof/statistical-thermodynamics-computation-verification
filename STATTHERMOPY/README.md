@@ -25,7 +25,9 @@ StatThermoPy builds every thermodynamic property from a molecule's own
 microscopic constants — its mass, geometry, symmetry number, rotational and
 vibrational temperatures, and electronic levels. From the translational,
 rotational (rigid rotor / exact quantum J-sum), vibrational (quantum harmonic
-oscillator) and electronic partition functions it derives the internal energy,
+oscillator), hindered-internal-rotation (1-D Mathieu-eigenvalue rotor, for
+single-bond torsions such as the methyl tops of ethane and propane) and
+electronic partition functions it derives the internal energy,
 enthalpy, entropy, Helmholtz and Gibbs energies, heat capacities, the specific
 heat ratio and the chemical potential, on both molar and massic bases, for pure
 gases and ideal-gas mixtures.
@@ -48,6 +50,10 @@ engine behind the book's statistical-thermodynamics chapters.
   alone — no empirical correlations enter the calculation path.
 - **All ideal-gas classes.** Monoatomic, diatomic, linear- and nonlinear-
   polyatomic molecules.
+- **Hindered internal rotation.** Single-bond torsions (the methyl tops of
+  ethane and propane) are treated as 1-D hindered rotors via exact
+  Mathieu-eigenvalue diagonalisation — spanning the free-rotor and
+  harmonic-oscillator limits — rather than as harmonic oscillators.
 - **Every standard property.** `U, H, S, A, G, Cv, Cp, γ, μ` and the total
   partition function, on **molar and massic** bases, plus a per-mode breakdown.
 - **Ideal-gas mixtures.** Compose by mole or mass fraction.
@@ -62,7 +68,7 @@ engine behind the book's statistical-thermodynamics chapters.
   CSV / JSON / YAML / Excel / LaTeX.
 - **Performance backends.** NumPy (default), Numba, OpenMP and CUDA — same
   physics and API, machine-precision-identical results, 100×+ speedups.
-- **Tested.** 268 tests, ~96 % coverage.
+- **Tested.** 284 tests, ~96 % coverage.
 
 ## Screenshots
 
@@ -258,7 +264,7 @@ STATTHERMOPY/
 │   ├── thermodynamics.py       properties from Q (molar + massic, property_vs_T)
 │   ├── mixture.py              ideal-gas mixtures (mole / mass fractions)
 │   ├── core/                   Molecule, Geometry, State, Contribution
-│   ├── modes/                  translational · rotational · vibrational · electronic
+│   ├── modes/                  translational · rotational · vibrational · internal rotation · electronic
 │   ├── database/               registry + data/*.yaml   (22 species)
 │   ├── validation/             reference + data/*.yaml   (NIST/JANAF Cp°, S°)
 │   ├── backend/                executor + numpy / numba / openmp / cuda
@@ -268,7 +274,7 @@ STATTHERMOPY/
 │   ├── gui/                    PySide6 app · mainwindow · theme
 │   └── equilibrium/            chemical-equilibrium architecture (future phase)
 ├── examples/                   runnable scripts + Jupyter demo + output/ figures
-├── tests/                      pytest suite (268 tests, ~96% coverage)
+├── tests/                      pytest suite (284 tests, ~96% coverage)
 └── docs/                       THEORY.md + Sphinx sources (api.rst, theory.rst)
 ```
 
@@ -287,7 +293,7 @@ levels) into `src/statthermopy/database/data/`.
 ## Testing
 
 ```bash
-python -m pytest -q                       # 268 tests
+python -m pytest -q                       # 284 tests
 python -m pytest --cov=statthermopy       # with coverage (~96%)
 ```
 
