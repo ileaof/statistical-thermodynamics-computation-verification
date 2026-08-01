@@ -612,11 +612,13 @@ class StatThermoPyWindow(QMainWindow):
 
     def _populate_modes(self, mol, state) -> None:
         pf = Thermodynamics(mol, state).partition
-        contribs = pf.contributions(state)
+        # Show hindered internal rotation as its own row (only appears for molecules that have
+        # rotors, e.g. C2H6/C3H8); "vibrational" then holds the harmonic oscillators alone.
+        contribs = pf.contributions(state, split_internal_rotation=True)
         pv = pf.evaluate(state)
         self.modes_table.setRowCount(len(contribs) + 1)
         for i, (name, c) in enumerate(contribs.items()):
-            self.modes_table.setItem(i, 0, QTableWidgetItem(name))
+            self.modes_table.setItem(i, 0, QTableWidgetItem(name.replace("_", " ")))
             for j, col in enumerate(_MODE_COLS):
                 val = getattr(c, col, float("nan"))
                 self.modes_table.setItem(i, j + 1, QTableWidgetItem(_fmt(val)))

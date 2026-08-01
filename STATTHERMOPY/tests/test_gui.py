@@ -22,7 +22,7 @@ matplotlib.use("QtAgg")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from statthermopy.gui.app import main as gui_main  # noqa: E402
-from statthermopy.gui.mainwindow import StatThermoPyWindow  # noqa: E402
+from statthermopy.gui.mainwindow import _MODE_COLS, StatThermoPyWindow  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +76,27 @@ def test_compute_pure_gas_populates_results(win):
     # results + modes tables populated
     assert win.results_table.rowCount() > 0
     assert win.modes_table.rowCount() == 5  # 4 modes + totals
+
+
+def test_modes_table_shows_internal_rotation_row_for_ethane(win):
+    """A molecule with hindered internal rotors (C2H6) exposes a dedicated 'internal rotation'
+    per-mode row; the harmonic 'vibrational' row is shown alongside it."""
+    win.gas_combo.setCurrentText("C2H6")
+    win.T_spin.setValue(800.0)
+    win.P_spin.setValue(101325.0)
+    win._on_compute()
+    assert win.modes_table.rowCount() == 6  # 5 modes + totals
+    labels = [
+        win.modes_table.item(r, 0).text()
+        for r in range(win.modes_table.rowCount())
+        if win.modes_table.item(r, 0) is not None
+    ]
+    assert "internal rotation" in labels
+    assert "vibrational" in labels
+    # the internal-rotation row carries a non-zero Cv_m contribution (last column)
+    ir_row = labels.index("internal rotation")
+    cv_col = _MODE_COLS.index("Cv_m") + 1
+    assert float(win.modes_table.item(ir_row, cv_col).text()) > 0.0
 
 
 def test_compute_mixture(win):

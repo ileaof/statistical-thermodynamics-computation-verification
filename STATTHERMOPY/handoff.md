@@ -291,9 +291,18 @@ validation changed**: nonlinear/linear now require `n_osc + n_rot == 3N-6 / 3N-5
 **Wiring:** `PartitionFunction` builds `self.internal_rotation = HinderedRotor(mol.internal_rotors)`
 and **folds it into Q_v** — `evaluate()` adds its `ln_q` to `lnQv`; `contributions()["vibrational"]`
 is harmonic+rotor via `_vibrational_contribution` (name kept "vibrational"). So the reported
-4-factor Q (Qt/Qr/Qv/Qe) and the 4-key contributions dict are **unchanged** — GUI 5-row modes
-table and exporters untouched. `modes` property exposes `internal_rotation` as a 5th entry
-(test_coverage updated).
+4-factor Q (Qt/Qr/Qv/Qe) and the *default* 4-key contributions dict are **unchanged** —
+exporters and `Thermodynamics` untouched. `modes` property exposes `internal_rotation` as a 5th
+entry (test_coverage updated).
+
+**GUI per-mode exposure:** `contributions(state, split_internal_rotation=True)` (opt-in kwarg,
+default folded so all other callers are unaffected) returns a 5th `"internal_rotation"` entry
+**only when the molecule has rotors**, with `"vibrational"` then harmonic-only; the two views
+give identical totals. `gui/mainwindow._populate_modes` passes `split_internal_rotation=True`,
+so C2H6/C3H8 show a dedicated "internal rotation" row (6 rows incl. totals) while the other 20
+species are unchanged (5 rows). Row labels underscore→space. Tests:
+`test_split_internal_rotation_reports_separate_mode` (partition) +
+`test_modes_table_shows_internal_rotation_row_for_ethane` (GUI).
 
 **Backend:** accelerated `molar_property_grid` kernels model only harmonic vibration, so
 `_has_internal_rotors(mol)` (in `numba_backend.py`, imported by openmp/cuda) makes all three

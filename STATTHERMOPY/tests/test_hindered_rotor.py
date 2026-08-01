@@ -157,6 +157,27 @@ def test_internal_rotation_folds_into_vibrational_contribution():
     assert rot.Cv_m > 0.0  # the rotor actually contributes
 
 
+def test_split_internal_rotation_reports_separate_mode():
+    """split_internal_rotation=True gives a distinct 'internal_rotation' entry for a molecule
+    with rotors, with the same total as the folded view; molecules without rotors are unchanged."""
+    st = State(T=800.0, P=101325.0)
+    pf = Thermodynamics(get("C2H6"), st).partition
+    folded = pf.contributions(st)
+    split = pf.contributions(st, split_internal_rotation=True)
+    assert set(split) == {
+        "translational", "rotational", "vibrational", "internal_rotation", "electronic",
+    }
+    # vibrational (harmonic-only) + internal_rotation == the folded vibrational
+    for attr in ("ln_q", "U_m", "S_m", "A_m", "Cv_m"):
+        combined = getattr(split["vibrational"], attr) + getattr(split["internal_rotation"], attr)
+        assert combined == pytest.approx(getattr(folded["vibrational"], attr), rel=1e-12)
+    # a molecule without internal rotors keeps the four-mode view even when split is requested
+    pf_n2 = Thermodynamics(get("N2"), st).partition
+    assert set(pf_n2.contributions(st, split_internal_rotation=True)) == {
+        "translational", "rotational", "vibrational", "electronic",
+    }
+
+
 def test_monatomic_rejects_internal_rotors():
     from statthermopy import Geometry, Molecule
     with pytest.raises(ValueError):

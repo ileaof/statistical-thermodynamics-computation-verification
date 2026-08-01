@@ -100,13 +100,29 @@ class PartitionFunction:
             ln_Qt=lnQt, ln_Qr=lnQr, ln_Qv=lnQv, ln_Qe=lnQe, ln_Qtotal=lnQ,
         )
 
-    def contributions(self, state: State):
-        """Return the four :class:`Contribution` objects at ``state`` (one per mode).
+    def contributions(self, state: State, *, split_internal_rotation: bool = False):
+        """Return the per-mode :class:`Contribution` objects at ``state``.
 
-        Any hindered internal rotation is summed into the ``"vibrational"`` contribution, so the
-        four-mode breakdown is preserved for molecules with and without internal rotors alike.
+        By default any hindered internal rotation is summed into the ``"vibrational"``
+        contribution, so the canonical four-mode breakdown is preserved for molecules with and
+        without internal rotors alike (this is what :class:`~statthermopy.thermodynamics.
+        Thermodynamics` and the exporters consume).
+
+        With ``split_internal_rotation=True`` a molecule that carries internal rotors reports a
+        **separate** ``"internal_rotation"`` entry, with ``"vibrational"`` then holding the
+        harmonic oscillators only. The two views give identical totals (harmonic + rotor =
+        folded vibrational); the split form is used by the GUI's per-mode table. Molecules
+        without internal rotors are unaffected either way.
         """
         rs = self._resolved(state)
+        if split_internal_rotation and self.molecule.internal_rotors:
+            return {
+                "translational": self.translational.contribution(rs),
+                "rotational": self.rotational.contribution(rs),
+                "vibrational": self.vibrational.contribution(rs),
+                "internal_rotation": self.internal_rotation.contribution(rs),
+                "electronic": self.electronic.contribution(rs),
+            }
         return {
             "translational": self.translational.contribution(rs),
             "rotational": self.rotational.contribution(rs),
