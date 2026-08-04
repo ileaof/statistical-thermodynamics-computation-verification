@@ -358,6 +358,32 @@ def test_cli_mixture(capsys):
     assert "M_avg" in out and "gamma" in out
 
 
+def test_cli_fluid_air(capsys):
+    """The `fluid Air` preset builds humid/dry air and prints the mixture report with the
+    per-component breakdown, M_avg, R_specific and the entropy of mixing."""
+    from statthermopy.cli.app import StatThermoPyShell
+    sh = StatThermoPyShell()
+    sh.onecmd("fluids")
+    assert "Air" in capsys.readouterr().out
+    sh.onecmd("fluid Air h2o=0.01")
+    sh.onecmd("T = 298.15")
+    sh.onecmd("P = 101325")
+    sh.onecmd("properties")
+    out = capsys.readouterr().out
+    assert "M_avg" in out and "R_specific" in out and "S_mixing" in out
+    assert "Per-component" in out
+    assert "H2O" in out and "N2" in out
+
+
+def test_cli_run_fluid_air(capsys):
+    """One-shot `run --fluid Air` reports the air mixture."""
+    from statthermopy.cli.app import main
+    rc = main(["run", "--fluid", "Air", "--T", "300", "--P", "101325"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Mixture" in out and "M_avg" in out
+
+
 def test_cli_modes(capsys):
     from statthermopy.cli.app import StatThermoPyShell
     sh = StatThermoPyShell()

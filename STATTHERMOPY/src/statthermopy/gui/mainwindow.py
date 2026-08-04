@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 
 from ..core.state import State
 from ..database import get, list_molecules
+from ..fluids import available_fluids, get_fluid
 from ..io import Exporter
 from ..mixture import IdealGasMixture
 from ..plots import (
@@ -77,6 +78,9 @@ _UNITS = {
     "Cv_s": "J/kg/K", "Cp_s": "J/kg/K", "R_specific": "J/kg/K",
 }
 _MODE_COLS = ["ln_q", "U_m", "S_m", "A_m", "Cv_m"]
+#: per-component contribution columns (mixture mode); each maps to a ``*_contrib`` field.
+_COMPONENT_COLS = ["x_i", "U", "H", "S", "G", "Cp"]
+_COMPONENT_ATTRS = ["x", "U_contrib", "H_contrib", "S_contrib", "G_contrib", "Cp_contrib"]
 #: Special Plot-tab entry that overlays both thermal fields (T_v and T_p) on one axes.
 _THERMAL_FIELDS_ITEM = "T_v & T_p (thermal fields)"
 _VALIDATION_TOL_PERCENT = 5.0
@@ -202,6 +206,19 @@ class StatThermoPyWindow(QMainWindow):
         row.addStretch()
         sel_lay.addLayout(row)
 
+        # predefined-fluid preset (e.g. Air): loads a ready composition into the editable mixture
+        preset_row = QHBoxLayout()
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItem("— none —")
+        for fname in available_fluids():
+            self.preset_combo.addItem(fname)
+        self.preset_load_btn = QPushButton("Load preset")
+        self.preset_load_btn.clicked.connect(self._on_load_preset)
+        preset_row.addWidget(QLabel("Preset fluid:"))
+        preset_row.addWidget(self.preset_combo, 1)
+        preset_row.addWidget(self.preset_load_btn)
+        sel_lay.addLayout(preset_row)
+
         self.gas_combo = QComboBox()
         for name in list_molecules():
             self.gas_combo.addItem(name)
@@ -291,15 +308,27 @@ class StatThermoPyWindow(QMainWindow):
         res_lay.addWidget(self.results_table)
         rlay.addWidget(res_box, 1)
 
-        modes_box = QGroupBox("Per-mode contributions")
-        modes_lay = QVBoxLayout(modes_box)
+        self.modes_box = QGroupBox("Per-mode contributions")
+        modes_lay = QVBoxLayout(self.modes_box)
         modes_lay.setContentsMargins(8, 8, 8, 8)
         self.modes_table = QTableWidget(0, len(_MODE_COLS) + 1, self)
         self.modes_table.setAlternatingRowColors(True)
         self.modes_table.setHorizontalHeaderLabels(["Mode", *_MODE_COLS])
         self.modes_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         modes_lay.addWidget(self.modes_table)
-        rlay.addWidget(modes_box, 1)
+        rlay.addWidget(self.modes_box, 1)
+
+        # per-component contributions (mixture mode); hidden until a mixture is computed
+        self.components_box = QGroupBox("Per-component contributions")
+        comp_lay = QVBoxLayout(self.components_box)
+        comp_lay.setContentsMargins(8, 8, 8, 8)
+        self.components_table = QTableWidget(0, len(_COMPONENT_COLS) + 1, self)
+        self.components_table.setAlternatingRowColors(True)
+        self.components_table.setHorizontalHeaderLabels(["Species", *_COMPONENT_COLS])
+        self.components_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        comp_lay.addWidget(self.components_table)
+        rlay.addWidget(self.components_box, 1)
+        self.components_box.setVisible(False)
         splitter.addWidget(right)
 
         splitter.setStretchFactor(0, 0)
@@ -726,6 +755,35 @@ class StatThermoPyWindow(QMainWindow):
         basis = "mass" if self.basis_mass.isChecked() else "mole"
         return IdealGasMixture.from_names(fractions, basis=basis)
 
+    def _on_load_preset(self) -> None:
+        """Load a predefined fluid (e.g. Air) into the editable mixture composition."""
+        name = self.preset_combo.currentText()
+        if name.startswith("—"):
+            return
+        try:
+            fluid = get_fluid(name)
+        except KeyError:  # pragma: no cover - combo only lists valid fluids
+            return
+        # switch to mixture mode and fill the (still editable) table with the dry composition
+        self.radio_mix.setChecked(True)
+        self._on_mode_changed()
+        self.basis_mole.setChecked(True)
+        self._set_mixture_composition(fluid.dry_composition())
+
+    def _set_mixture_composition(self, comp: dict) -> None:
+        """Replace the mixture table with ``{species: mole fraction}`` (editable afterwards)."""
+        while self.mix_table.rowCount() > 0:
+            self.mix_table.removeRow(0)
+        for name, frac in comp.items():
+            self._add_mixture_row()
+            r = self.mix_table.rowCount() - 1
+            combo = self.mix_table.cellWidget(r, 0)
+            idx = combo.findText(name, Qt.MatchFixedString)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            self.mix_table.cellWidget(r, 1).setValue(float(frac))
+        self._update_fraction_sum()
+
     def _make_state(self) -> State | None:
         kwargs: dict = {"T": float(self.T_spin.value()), "P": float(self.P_spin.value())}
         if self.V_chk.isChecked():
@@ -751,6 +809,8 @@ class StatThermoPyWindow(QMainWindow):
                 res = Thermodynamics(mol, state).compute()
                 self._populate_results(res)
                 self._populate_modes(mol, state)
+                self.modes_box.setVisible(True)
+                self.components_box.setVisible(False)
             else:
                 mix = self._build_mixture()
                 if mix is None:
@@ -758,27 +818,48 @@ class StatThermoPyWindow(QMainWindow):
                     return
                 res = mix.compute(state)
                 self._populate_results(res)
-                self.modes_table.setRowCount(0)
+                self._populate_components(res)
+                self.modes_box.setVisible(False)
+                self.components_box.setVisible(True)
             self._last_result = res
         except Exception as exc:  # pragma: no cover - GUI error path
             QMessageBox.critical(self, "StatThermoPy", f"Computation failed:\n{exc}")
 
     def _populate_results(self, res) -> None:
-        rows = []
+        rows = []  # (label, molar value or None, massic value or None)
         for key in _MOLAR_ROWS:
             mv = getattr(res, key, None)
             sv = _massic_for(key)
             massic = getattr(res, sv, None) if sv else None
-            rows.append((key, mv, massic))
-        # gamma has no massic counterpart; pad missing massic with "".
-        self.results_table.setRowCount(len(rows))
-        for i, (key, mv, massic) in enumerate(rows):
             unit = _UNITS.get(key, "")
-            self.results_table.setItem(i, 0, QTableWidgetItem(f"{key}  [{unit}]" if unit else key))
+            rows.append((f"{key}  [{unit}]" if unit else key, mv, massic))
+        # mixture-only summary: average molar mass, specific gas constant, entropy of mixing
+        if hasattr(res, "S_mixing"):
+            rows.append(("M_avg  [g/mol]", res.M_avg * 1e3, None))
+            rows.append(("R_specific  [J/kg/K]", None, res.R_specific))
+            rows.append(("S_mixing  [J/mol/K]", res.S_mixing, None))
+        self.results_table.setRowCount(len(rows))
+        for i, (label, mv, massic) in enumerate(rows):
+            self.results_table.setItem(i, 0, QTableWidgetItem(label))
             self.results_table.setItem(i, 1, QTableWidgetItem(_fmt(mv) if mv is not None else ""))
             self.results_table.setItem(
                 i, 2, QTableWidgetItem(_fmt(massic) if massic is not None else "—")
             )
+
+    def _populate_components(self, res) -> None:
+        """Fill the per-component contribution table from a mixture result (with a totals row)."""
+        comps = list(res.components.values())
+        self.components_table.setRowCount(len(comps) + 1)
+        for i, c in enumerate(comps):
+            self.components_table.setItem(i, 0, QTableWidgetItem(c.name))
+            for j, attr in enumerate(_COMPONENT_ATTRS):
+                self.components_table.setItem(i, j + 1, QTableWidgetItem(_fmt(getattr(c, attr))))
+        # totals row: mole fractions sum to 1; the *_contrib columns sum to the mixture molar total
+        tot = len(comps)
+        self.components_table.setItem(tot, 0, QTableWidgetItem("Σ total"))
+        totals = [sum(c.x for c in comps), res.U_m, res.H_m, res.S_m, res.G_m, res.Cp_m]
+        for j, val in enumerate(totals):
+            self.components_table.setItem(tot, j + 1, QTableWidgetItem(_fmt(val)))
 
     def _populate_modes(self, mol, state) -> None:
         pf = Thermodynamics(mol, state).partition

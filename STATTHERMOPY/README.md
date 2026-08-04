@@ -16,7 +16,9 @@ calculation itself.
   contributions, plus **hindered internal rotation** (1-D Mathieu-eigenvalue rotor) for
   single-bond torsions such as the methyl tops of ethane and propane.
 - Molar and massic bases for U, H, S, A, G, Cv, Cp, γ, μ, plus total partition function.
-- Ideal-gas mixtures (mole or mass fractions).
+- Ideal-gas mixtures (mole or mass fractions) with a per-component contribution breakdown and
+  the entropy of mixing, plus a **predefined-fluid** registry — select **Air** (standard dry
+  N₂/O₂/Ar/CO₂ with optional water vapour) or build any custom composition.
 - Molecular database of 22 species (easily extensible via YAML).
 - CLI scientific terminal, property-vs-T plots, and export to CSV/JSON/YAML/Excel/LaTeX.
 - **Statistical transport properties** — first-principles transport & thermophysical coefficients

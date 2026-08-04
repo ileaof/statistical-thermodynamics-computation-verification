@@ -21,14 +21,48 @@ Given mole fractions ``x_i`` (converted from mass fractions when needed):
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from .constants import R
 from .core.molecule import Molecule
 from .core.state import State
 from .thermodynamics import Thermodynamics
 
-__all__ = ["IdealGasMixture", "MixtureProperties"]
+__all__ = ["IdealGasMixture", "MixtureProperties", "ComponentContribution"]
+
+
+@dataclass
+class ComponentContribution:
+    """One species' share of an ideal-gas mixture's properties.
+
+    The ``*_m`` fields are the pure component's own molar properties — energetic ones
+    (``U_m``/``H_m``/``Cv_m``/``Cp_m``) at the mixture pressure ``P`` (pressure-independent for an
+    ideal gas), the pressure-dependent ones (``S_m``/``G_m``/``mu_m``) at the component's partial
+    pressure ``P_i = x_i P``. The ``*_contrib`` fields are the mole-fraction-weighted amounts
+    ``x_i · value`` that this component adds to the mixture total (they sum, over components, to
+    the mixture's molar property).
+    """
+
+    name: str
+    x: float             # mole fraction
+    molar_mass: float    # kg/mol
+    # pure-component molar properties
+    U_m: float
+    H_m: float
+    S_m: float
+    A_m: float
+    G_m: float
+    Cv_m: float
+    Cp_m: float
+    mu_m: float
+    # weighted contributions to the mixture molar totals (sum to the mixture value)
+    U_contrib: float
+    H_contrib: float
+    S_contrib: float
+    A_contrib: float
+    G_contrib: float
+    Cv_contrib: float
+    Cp_contrib: float
 
 
 @dataclass
@@ -53,6 +87,7 @@ class MixtureProperties:
     T_p: float       # constant-pressure thermal field, H_m / Cp_m (K)
     mu_m: float
     R_molar: float
+    S_mixing: float  # entropy of mixing, -R Σ x_i ln x_i (J/mol/K)
     # massic
     U_s: float
     H_s: float
@@ -62,6 +97,8 @@ class MixtureProperties:
     Cv_s: float
     Cp_s: float
     R_specific: float
+    # per-component breakdown (species name -> ComponentContribution)
+    components: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -124,23 +161,33 @@ class IdealGasMixture:
         x = self.x
 
         U_m = H_m = Cv_m = Cp_m = S_m = G_m = 0.0
+        S_mixing = 0.0
+        components: dict[str, ComponentContribution] = {}
         for mol, xi in x.items():
             # component at its partial pressure P_i = x_i P
             Pi = xi * P
-            st_i = State(T=T, P=Pi)
-            th = Thermodynamics(mol, st_i)
-            p = th.compute()
-            # U, H, Cv, Cp are pressure-independent for ideal gases -> weight by x at total P.
-            st_p = State(T=T, P=P)
-            pp = Thermodynamics(mol, st_p).compute()
+            p = Thermodynamics(mol, State(T=T, P=Pi)).compute()
+            # U, H, Cv, Cp are pressure-independent for ideal gases -> evaluate at total P.
+            pp = Thermodynamics(mol, State(T=T, P=P)).compute()
             U_m += xi * pp.U_m
             H_m += xi * pp.H_m
             Cv_m += xi * pp.Cv_m
             Cp_m += xi * pp.Cp_m
-            # entropy at partial pressure already includes mixing
+            # entropy / Gibbs at partial pressure already include the mixing shift
             S_m += xi * p.S_m
-            # chemical potential at partial pressure
             G_m += xi * p.G_m
+            if xi > 0.0:
+                S_mixing += -R * xi * math.log(xi)
+            # per-component Helmholtz mirrors the mixture definition A = U(T,P) - T S(T,P_i)
+            A_i = pp.U_m - T * p.S_m
+            components[mol.name] = ComponentContribution(
+                name=mol.name, x=xi, molar_mass=mol.molar_mass,
+                U_m=pp.U_m, H_m=pp.H_m, S_m=p.S_m, A_m=A_i, G_m=p.G_m,
+                Cv_m=pp.Cv_m, Cp_m=pp.Cp_m, mu_m=p.mu_m,
+                U_contrib=xi * pp.U_m, H_contrib=xi * pp.H_m, S_contrib=xi * p.S_m,
+                A_contrib=xi * A_i, G_contrib=xi * p.G_m,
+                Cv_contrib=xi * pp.Cv_m, Cp_contrib=xi * pp.Cp_m,
+            )
 
         A_m = U_m - T * S_m
         gamma = Cp_m / Cv_m
@@ -155,8 +202,10 @@ class IdealGasMixture:
             M_avg=M_avg,
             U_m=U_m, H_m=H_m, S_m=S_m, A_m=A_m, G_m=G_m,
             Cv_m=Cv_m, Cp_m=Cp_m, gamma=gamma, T_v=T_v, T_p=T_p, mu_m=mu_m, R_molar=R,
+            S_mixing=S_mixing,
             U_s=U_m / M_avg, H_s=H_m / M_avg, S_s=S_m / M_avg, A_s=A_m / M_avg,
             G_s=G_m / M_avg, Cv_s=Cv_m / M_avg, Cp_s=Cp_m / M_avg, R_specific=R / M_avg,
+            components=components,
         )
 
     properties = compute

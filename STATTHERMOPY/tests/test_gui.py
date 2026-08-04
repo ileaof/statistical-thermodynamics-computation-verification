@@ -118,6 +118,41 @@ def test_compute_mixture(win):
     assert 280.0 < res.R_specific < 295.0
 
 
+def test_air_preset_loads_and_shows_components(win):
+    """Selecting the 'Air' preset fills the editable mixture with dry-air species, and computing
+    shows the per-component contribution table plus M_avg / R_specific / S_mixing."""
+    win.preset_combo.setCurrentIndex(win.preset_combo.findText("Air"))
+    win._on_load_preset()
+    assert win.radio_mix.isChecked()
+    species = [win.mix_table.cellWidget(r, 0).currentText()
+               for r in range(win.mix_table.rowCount())]
+    assert set(species) == {"N2", "O2", "AR", "CO2"}
+
+    win.T_spin.setValue(298.15)
+    win.P_spin.setValue(101325.0)
+    win._on_compute()
+    res = win._last_result
+    # canonical dry-air numbers
+    assert res.M_avg * 1e3 == pytest.approx(28.96, abs=0.05)
+    assert res.R_specific == pytest.approx(287.0, abs=0.5)
+    assert res.S_mixing > 0.0
+
+    # per-component table visible with a species row per component + a totals row
+    assert not win.components_box.isHidden()
+    assert win.modes_box.isHidden()
+    comp_labels = [win.components_table.item(r, 0).text()
+                   for r in range(win.components_table.rowCount())]
+    assert {"N2", "O2", "Ar", "CO2"}.issubset(set(comp_labels))
+    assert "Σ total" in comp_labels
+
+    # results table lists the mixture summary rows
+    res_labels = [win.results_table.item(r, 0).text()
+                  for r in range(win.results_table.rowCount())]
+    assert any("M_avg" in x for x in res_labels)
+    assert any("R_specific" in x for x in res_labels)
+    assert any("S_mixing" in x for x in res_labels)
+
+
 def test_mixture_fractions_free_entry(win):
     """Each fraction is free and independent in [0, 1]; editing one never
     changes another. The mixture is normalised at compute time."""

@@ -290,6 +290,20 @@ With mole fractions x_i (converted from mass fractions via x_i ∝ w_i/M_i):
 - G_m = Σ x_i μ_i(T, P_i) = Σ x_i [G_m,i(T,P) + R T ln x_i] ;
 - A_m = U_m − T S_m = G_m − R T ;  γ = Cp_m/Cv_m.
 
+Because S_m uses the partial-pressure entropies, the mixing term ΔS_mix is already embedded in
+S_m (and hence in A_m, G_m); it is also reported separately as ``S_mixing``. Each species' share
+of every molar total — the weighted contribution x_i·(·)_i — is returned in a per-component
+breakdown, so the origin of each property is traceable component by component.
+
+**Predefined fluids (atmospheric air).** A small registry names ready compositions built on this
+engine. The flagship is **air**: standard dry-air mole fractions (N₂ 0.78084, O₂ 0.20946,
+Ar 0.00934, CO₂ 0.00040 — M̄ ≈ 28.96 g/mol, R ≈ 287 J/kg/K), with an optional water-vapour mole
+fraction (the dry constituents scale to 1 − x_{H₂O} and H₂O is added at x_{H₂O}). Humidity is a
+*composition* input — a water mole fraction — never derived from a saturation-pressure
+correlation, so the whole path stays free of empirical curves. Compositions are fully editable and
+custom mixtures remain available; the registry is deliberately decoupled from how a mixture is
+*evaluated*, leaving room for a future non-ideal (real-gas) mixture model behind the same factory.
+
 ---
 
 ## 8. Chemical equilibrium (architecture only — Phase 1 placeholder)

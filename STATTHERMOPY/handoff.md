@@ -348,6 +348,46 @@ monatomic gas both equal T exactly — a useful diagnostic). Added as first-clas
   `test_plot_thermal_fields_two_distinct_curves`, `test_thermal_fields_property_vs_T_grid_matches`,
   `test_mixture_thermal_fields`, `test_thermal_fields_available_in_gui`. Suite: **291 passed, 96%**.
 
+## Predefined fluids — atmospheric Air (complete)
+
+New **`statthermopy/fluids.py`** module: named gas compositions built on the ideal-gas mixture
+engine, exposed via the CLI and GUI. Flagship fluid **Air** = standard dry-air mole fractions
+(`STANDARD_DRY_AIR` = N2 0.78084, O2 0.20946, AR 0.00934, CO2 0.00040 → M̄ 28.96 g/mol, R 287
+J/kg/K) with **optional water vapour** as a *mole-fraction* input (`air(water_mole_fraction=…)`;
+dry constituents scale to 1−w, H2O added at w — no saturation-pressure correlation, stays
+first-principles). API: `air()`, `PredefinedFluid` (name/description/composition/source/
+`humidifiable`; `.build(water_mole_fraction=…)`, `.dry_composition()`), open registry
+`register_fluid`/`available_fluids`/`get_fluid` (case-insensitive). Extensible & decoupled from
+*evaluation* so a future non-ideal mixture model slots behind the same factory. **Planetary
+atmospheres were explicitly cut** (user: "corte atmosferas de outros planetas") — none registered.
+All exported from the top-level package.
+
+**Mixture breakdown (`mixture.py`):** new `ComponentContribution` dataclass (per species: x,
+molar_mass, its pure-component `*_m` props, and the weighted `*_contrib` = x_i·value that sum to
+the mixture molar total). `MixtureProperties` gained `S_mixing` (−R Σ x_i ln x_i, reported
+separately though already embedded in S_m via the partial-pressure entropies) and
+`components: dict[str, ComponentContribution]`. `compute()` builds both. `asdict`/export handle
+the nested dataclasses (JSON-serialisable, verified). `math` import is now actually used.
+
+**CLI (`cli/app.py`):** `fluids` (list) and `fluid Air [h2o=0.01]` (select preset as the active
+mixture); `_print_mixture` now prints R_specific, S_mixing and the per-component contribution
+table; one-shot `run --fluid Air [--humidity 0.01]`.
+
+**GUI (`gui/mainwindow.py`):** "Preset fluid" combo + "Load preset" button in Selection → switches
+to Mixture mode and fills the **editable** mix table with the fluid's composition
+(`_on_load_preset`/`_set_mixture_composition`, `Qt.MatchFixedString` for case-insensitive species
+match). Right column now has a second `self.components_box`/`components_table` shown for mixtures
+(hidden for pure gases, which keep the modes table — pure 5-row test unchanged); `_on_compute`
+toggles `modes_box`/`components_box`. `_populate_results` appends M_avg / R_specific / S_mixing
+rows for mixtures (detected via `hasattr(res,"S_mixing")`). `_populate_components` fills the table
++ a "Σ total" row. Constants `_COMPONENT_COLS`/`_COMPONENT_ATTRS`. NOTE: the GUI already had a 4th
+**Transport** tab (added between my sessions) — untouched.
+
+**Tests:** `tests/test_fluids.py` (10: composition/M̄/R, humidity scaling + bounds, registry
+extensibility, contributions-sum-to-totals, S_mixing, as_dict/JSON). `test_auxiliary.py`:
+`test_cli_fluid_air`, `test_cli_run_fluid_air`. `test_gui.py`:
+`test_air_preset_loads_and_shows_components`. All green; my new files ruff-clean.
+
 ## Plan file
 
 `C:\Users\ileao\.claude\plans\synthetic-wobbling-glacier.md` — the approved Phase-3 plan

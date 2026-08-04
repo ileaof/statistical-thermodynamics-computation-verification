@@ -42,7 +42,15 @@ from .core import (
     State,
     VibrationalMode,
 )
-from .mixture import IdealGasMixture, MixtureProperties
+from .fluids import (
+    STANDARD_DRY_AIR,
+    PredefinedFluid,
+    air,
+    available_fluids,
+    get_fluid,
+    register_fluid,
+)
+from .mixture import ComponentContribution, IdealGasMixture, MixtureProperties
 from .modes import Electronic, HinderedRotor, Rotational, Translational, Vibrational
 from .partition import PartitionFunction, PartitionValues
 from .thermodynamics import ThermoProperties, Thermodynamics
@@ -69,6 +77,13 @@ __all__ = [
     "ThermoProperties",
     "IdealGasMixture",
     "MixtureProperties",
+    "ComponentContribution",
+    "air",
+    "PredefinedFluid",
+    "available_fluids",
+    "get_fluid",
+    "register_fluid",
+    "STANDARD_DRY_AIR",
     "Translational",
     "Rotational",
     "Vibrational",

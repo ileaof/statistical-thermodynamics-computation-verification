@@ -24,6 +24,7 @@ from cmd import Cmd
 
 from ..core.state import State
 from ..database import get, list_molecules
+from ..fluids import available_fluids, get_fluid
 from ..io import Exporter
 from ..mixture import IdealGasMixture
 from ..plots import MOLAR_PROPS, PARTITION_PROPS, plot_property
@@ -149,6 +150,42 @@ class StatThermoPyShell(Cmd):
             print(f"  mixture ({basis}): {self.mixture}")
         except (KeyError, ValueError) as exc:
             print(f"  error: {exc}")
+
+    def do_fluids(self, _arg: str) -> None:
+        """List the available predefined fluids (e.g. Air)."""
+        print("  predefined fluids: " + ", ".join(available_fluids()))
+
+    def do_fluid(self, arg: str) -> None:
+        """Select a predefined fluid:  fluid Air   |   fluid Air h2o=0.01
+
+        ``h2o=<x>`` adds water vapour at mole fraction ``x`` (dry constituents scaled to fill the
+        rest). The fluid becomes the active mixture; use ``properties`` to evaluate it.
+        """
+        parts = arg.split()
+        if not parts:
+            print("  usage: fluid <name> [h2o=<mole fraction>]   (e.g. fluid Air h2o=0.01)")
+            print(f"  available: {', '.join(available_fluids())}")
+            return
+        name = parts[0]
+        water = 0.0
+        for tok in parts[1:]:
+            if tok.lower().startswith("h2o="):
+                try:
+                    water = float(tok.split("=", 1)[1])
+                except ValueError:
+                    print(f"  error: cannot parse {tok!r}")
+                    return
+        try:
+            fluid = get_fluid(name)
+            self.mixture = fluid.build(water_mole_fraction=water)
+            self.molecule = None
+        except (KeyError, ValueError) as exc:
+            print(f"  error: {exc}")
+            return
+        print(f"  fluid: {fluid.name} — {fluid.description}")
+        if water:
+            print(f"    with H2O at x = {water}")
+        print(f"    {self.mixture}")
 
     def do_T(self, arg: str) -> None:
         """Set temperature (K):  T = 298.15"""
@@ -369,19 +406,36 @@ class StatThermoPyShell(Cmd):
     def _print_mixture(res) -> None:
         comp = ", ".join(f"{k}={v:.4f}" for k, v in res.x.items())
         print(f"  Mixture ({res.basis}): {comp}")
-        print(f"  T={res.T:.4f} K  P={res.P:.6g} Pa  M_avg={res.M_avg*1e3:.4f} g/mol")
+        print(f"  T={res.T:.4f} K  P={res.P:.6g} Pa  M_avg={res.M_avg*1e3:.4f} g/mol  "
+              f"R_specific={res.R_specific:.4f} J/kg/K")
         print("  --- Molar (per mol) ---")
         for p in ("U_m", "H_m", "S_m", "A_m", "G_m", "Cv_m", "Cp_m", "gamma", "mu_m"):
-            print(f"    {p:7s} = {getattr(res, p):14.6f}  {_UNITS.get(p,'')}")
+            print(f"    {p:8s} = {getattr(res, p):14.6f}  {_UNITS.get(p,'')}")
+        print(f"    {'S_mixing':8s} = {res.S_mixing:14.6f}  J/mol/K")
         print("  --- Massic (per kg) ---")
         for p in ("U_s", "H_s", "S_s", "A_s", "G_s", "Cv_s", "Cp_s", "R_specific"):
             print(f"    {p:14s} = {getattr(res, p):14.6f}  {_UNITS.get(p,'')}")
+        if res.components:
+            print("  --- Per-component contribution to molar totals ---")
+            print(f"    {'species':8s}{'x_i':>9}{'U':>12}{'S':>10}{'G':>14}{'Cp':>9}")
+            for name, c in res.components.items():
+                print(f"    {name:8s}{c.x:9.4f}{c.U_contrib:12.2f}{c.S_contrib:10.3f}"
+                      f"{c.G_contrib:14.2f}{c.Cp_contrib:9.3f}")
 
 
 # --- one-shot argparse mode --------------------------------------------------
 
 
 def _run_one_shot(args: argparse.Namespace) -> None:
+    if args.fluid:
+        mix = get_fluid(args.fluid).build(water_mole_fraction=args.humidity)
+        st = State(T=args.T, P=args.P)
+        res = mix.compute(st)
+        StatThermoPyShell._print_mixture(res)
+        if args.export:
+            fmt, path = args.export
+            Exporter(res).to_json(path) if fmt == "json" else None
+        return
     if args.mixture:
         fractions: dict[str, float] = {}
         for tok in args.mixture:
@@ -453,6 +507,9 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--P", type=float, default=101325.0, help="pressure (Pa)")
     run.add_argument("--n", type=float, default=1.0, help="moles")
     run.add_argument("--mixture", nargs="+", help="mixture spec, e.g. Ar:0.7 N2:0.3")
+    run.add_argument("--fluid", help="predefined fluid, e.g. Air (overrides --gas/--mixture)")
+    run.add_argument("--humidity", type=float, default=0.0,
+                     help="water-vapour mole fraction for --fluid (e.g. 0.01)")
     run.add_argument("--basis", default="mole", choices=["mole", "mass"])
     run.add_argument("--export", nargs=2, metavar=("FMT", "PATH"),
                      help="export result, e.g. csv out.csv")
