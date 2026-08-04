@@ -22,6 +22,14 @@ A Computational Approach with Python*. Every computational example in the book i
 provided here in full, exactly as printed, so that any reader can reproduce its
 results and figures to the last digit.
 
+<p align="center">
+  <img src="docs/images/statthermopy_gui.png" alt="STATTHERMOPY Graphical User Interface" width="820">
+</p>
+
+<p align="center"><em>STATTHERMOPY Graphical User Interface — the repository's
+first-principles statistical-thermodynamics simulator (see
+<a href="STATTHERMOPY/">STATTHERMOPY/</a>).</em></p>
+
 ## Table of contents
 
 - [Overview](#overview)
