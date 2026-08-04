@@ -365,6 +365,59 @@ environment (`pip install statthermopy[accel]`).
 
 ---
 
+## 9.5 Statistical transport properties (Chapman–Enskog + Lennard–Jones)
+
+Everything above is **pure Statistical Mechanics of the ideal gas**. The transport coefficients —
+viscosity, thermal conductivity, diffusion — are *kinetic* properties: they depend on the
+collision dynamics, not on the equilibrium partition function alone. They are derived here from
+the **Chapman–Enskog** first-order solution of the Boltzmann equation for a dilute gas of
+molecules interacting through the **Lennard–Jones 12-6** pair potential, keeping the engine
+first-principles: the only molecular inputs are the LJ parameters `σ` (collision diameter) and
+`ε` (well depth), stored per species as `LennardJones` on the same footing as the spectroscopic
+constants, and the heat capacities/`γ` taken **directly** from the partition-function engine.
+
+Primary transport coefficients (SI):
+
+$$\mu = \frac{5}{16}\frac{\sqrt{m k_B T / \pi}}{\sigma^2\,\Omega^{(2,2)*}(T^*)}, \qquad
+k = \mu\,c_v\,\frac{9\gamma - 5}{4}\quad\text{(Eucken)}, \qquad
+D_{ij} = \frac{3}{16}\frac{k_B T}{P}\,\frac{1}{\sigma_{ij}^2\,\Omega^{(1,1)*}(T^*_{ij})}
+\sqrt{\frac{2 k_B T}{\pi m_{ij}}}$$
+
+with `T* = k_B T/ε`, the Lorentz–Berthelot combining rules
+`σ_ij = (σ_i+σ_j)/2`, `ε_ij = √(ε_i ε_j)` and reduced mass `m_ij = m_i m_j/(m_i+m_j)`. The
+self-diffusion `D_ii` is the `i = j` case (`m_ii = m/2`). The collision integrals `Ω^(l,s)*` use
+the **Neufeld et al. (1972)** fits, valid for `0.3 ≤ T* ≤ 100` with a graceful low-`T*` branch so
+curves stay continuous down to 0 K.
+
+The Eucken factor `(9γ−5)/4` equals the Chapman–Enskog monatomic multiplier `5/2` on `c_v` for
+`γ = 5/3`, recovering the exact CE result `k = (5/2) c_v μ = (15/4)(k_B/m) μ`. Because `Cv_m`,
+`Cp_m` and `γ` come from `Thermodynamics`, the transport coefficients inherit the full
+statistical-mechanics temperature dependence — the quantum vibrational/electronic excitation and,
+when enabled, the quantum rotor propagate into viscosity and conductivity with thermodynamic
+consistency.
+
+Derived thermophysical coefficients follow from the ideal-gas EOS (exact for this engine):
+
+$$\rho = \frac{PM}{RT},\quad \nu = \frac{\mu}{\rho},\quad \alpha = \frac{k}{\rho c_p},\quad
+Pr = \frac{4\gamma}{9\gamma - 5},\quad Sc = \frac{5}{6}\frac{\Omega^{(1,1)*}}{\Omega^{(2,2)*}},\quad
+Le = \frac{Sc}{Pr}$$
+
+$$Z = 1,\quad a = \sqrt{\gamma R_\text{sp} T},\quad \beta = \frac{1}{T},\quad
+\kappa_T = \frac{1}{P},\quad \mu_{JT} = 0$$
+
+Pressure enters through density (`ν`, `α`, `D ∝ 1/P`) and `κ_T`; `μ` and `k` are
+pressure-independent in the dilute limit — the physically correct ideal-gas behaviour. The
+dimensionless groups use closed forms so they stay finite at `T = 0` (where `μ, k, D → 0`).
+
+**Scope.** This is the dilute/ideal-gas (Chapman–Enskog first-approximation) regime, valid from
+0 K up to the highest supported temperature at any (low-to-moderate) pressure. Polar species
+(H₂O, NH₃, H₂S, SO₂) use the LJ approximation — larger uncertainty, noted per species. The
+architecture is open to dense-gas (Enskog / corresponding-states), mixture diffusion, plasma
+transport and combustion/CFD coupling as future extensions behind the same
+`TransportCalculator` / `TransportProperties` interface.
+
+---
+
 ## 10. References
 
 1. McQuarrie, D. A. *Statistical Mechanics* (University Science Books).
@@ -374,3 +427,9 @@ environment (`pip install statthermopy[accel]`).
 5. CODATA 2018 recommended values of the fundamental physical constants.
 6. NIST Computational Chemistry Comparison and Benchmark Database (CCCDB) — spectroscopic
    constants used to populate the molecular database.
+7. Hirschfelder, J. O., Curtiss, C. F. & Bird, R. B. *Molecular Theory of Gases and Liquids*
+   (Wiley) — Chapman–Enskog theory and the Lennard–Jones transport framework.
+8. Neufeld, P. D., Janzen, A. R. & Aziz, R. A. (1972) *J. Chem. Phys.* **57**, 1100–1102 — the
+   collision-integral correlations `Ω^(l,s)*` used by the transport module.
+9. Poling, B. E., Prausnitz, J. M. & O'Connell, J. P. *The Properties of Gases and Liquids*
+   (McGraw-Hill) — source of the Lennard–Jones `σ`/`ε` parameters in the molecular database.

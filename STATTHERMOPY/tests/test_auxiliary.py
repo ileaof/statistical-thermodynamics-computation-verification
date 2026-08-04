@@ -142,8 +142,174 @@ def test_plot_property_returns_axes(tmp_path):
 def test_plot_all_properties(tmp_path):
     from statthermopy.plots import plot_all_properties
     axes = plot_all_properties("Ar", [300, 500, 1000], P=1e5, save_dir=tmp_path)
-    assert len(axes) == 13  # 8 molar + 5 partition
-    assert any((tmp_path / f"Ar_{p}.png").exists() for p in ("Cp_m", "Qtotal"))
+    assert len(axes) == 15  # 10 molar (incl. T_v, T_p) + 5 partition
+    assert any((tmp_path / f"Ar_{p}.png").exists() for p in ("Cp_m", "T_v", "Qtotal"))
+
+
+def test_thermal_fields_definitions_and_units():
+    """T_v = U_m/Cv_m and T_p = H_m/Cp_m (both in K); for a monatomic gas both equal T."""
+    from statthermopy import Thermodynamics, get
+    from statthermopy.core.state import State
+    from statthermopy.plots import PROP_UNITS
+
+    r = Thermodynamics(get("N2"), State(T=600.0, P=1e5)).compute()
+    assert r.T_v == pytest.approx(r.U_m / r.Cv_m)
+    assert r.T_p == pytest.approx(r.H_m / r.Cp_m)
+    assert PROP_UNITS["T_v"] == "K" and PROP_UNITS["T_p"] == "K"
+
+    # monatomic Ar: U=3/2 RT, Cv=3/2 R -> T_v = T ; H=5/2 RT, Cp=5/2 R -> T_p = T
+    ar = Thermodynamics(get("Ar"), State(T=750.0, P=1e5)).compute()
+    assert ar.T_v == pytest.approx(750.0, rel=1e-9)
+    assert ar.T_p == pytest.approx(750.0, rel=1e-9)
+
+
+def test_mixture_thermal_fields():
+    """Mixtures expose T_v/T_p too, and the combined mixture plot draws both curves."""
+    from statthermopy import IdealGasMixture
+    from statthermopy.core.state import State
+    from statthermopy.plots import plot_mixture_thermal_fields
+
+    mix = IdealGasMixture.from_names({"N2": 0.78, "O2": 0.21, "Ar": 0.01})
+    mp = mix.compute(State(T=800.0, P=1e5))
+    assert mp.T_v == pytest.approx(mp.U_m / mp.Cv_m)
+    assert mp.T_p == pytest.approx(mp.H_m / mp.Cp_m)
+    ax = plot_mixture_thermal_fields(mix, [300, 800, 1500], P=1e5)
+    assert len(ax.lines) == 2 and len({ln.get_color() for ln in ax.lines}) == 2
+
+
+def test_plot_thermal_fields_two_distinct_curves():
+    """The combined view draws both fields with distinct colours, a legend and K units."""
+    from statthermopy.plots import plot_thermal_fields
+
+    ax = plot_thermal_fields("CO2", [300, 600, 1000, 1500], P=1e5)
+    assert len(ax.lines) == 2
+    colours = {line.get_color() for line in ax.lines}
+    assert len(colours) == 2  # distinct colours
+    legend_texts = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert any("T_v" in t for t in legend_texts) and any("T_p" in t for t in legend_texts)
+    assert "K" in ax.get_ylabel()
+
+
+def test_thermal_fields_property_vs_T_grid_matches():
+    """T_v/T_p are grid-derivable, so the accelerated property_vs_T matches the per-T path."""
+    import numpy as np
+
+    from statthermopy import Thermodynamics, get
+    from statthermopy.core.state import State
+
+    th = Thermodynamics(get("CO2"), State(T=300.0, P=1e5))
+    Ts = np.linspace(300.0, 1500.0, 7)
+    for prop in ("T_v", "T_p"):
+        _, grid = th.property_vs_T(prop, Ts)
+        ref = [getattr(Thermodynamics(get("CO2"), State(T=t, P=1e5)).compute(), prop) for t in Ts]
+        assert np.allclose(grid, ref)
+
+
+# -- Thermal fields: continuous from 0 K (Third-Law / numerical stability) -----
+
+
+def test_thermal_fields_finite_down_to_zero():
+    """T_v/T_p must stay finite (no NaN from the vibrational exp(theta/T) overflow) for
+    every T in (0, T_max] and tend to 0 as T -> 0."""
+    mol = get("N2")
+    for T in (1e-6, 1e-3, 1e-2, 1.0, 5.0, 50.0, 300.0, 2000.0):
+        r = Thermodynamics(mol, State(T=T, P=1e5)).compute()
+        assert math.isfinite(r.T_v), T
+        assert math.isfinite(r.T_p), T
+        assert math.isfinite(r.Cv_m), T
+    # approaches 0 as T -> 0 (T_v = U/Cv ~ T for the classical model at low T)
+    r_lo = Thermodynamics(mol, State(T=1e-3, P=1e5)).compute()
+    assert abs(r_lo.T_v) < 1e-2
+    assert abs(r_lo.T_p) < 1e-2
+
+
+def test_thermal_fields_at_zero_kelvin():
+    """T = 0 is accepted; the thermal fields collapse to 0 and U_m = H_m = 0."""
+    r = Thermodynamics(get("N2"), State(T=0.0, P=1e5)).compute()
+    assert math.isfinite(r.T_v) and r.T_v == 0.0
+    assert math.isfinite(r.T_p) and r.T_p == 0.0
+    assert r.U_m == 0.0 and r.H_m == 0.0
+    # classical trans+rot keep their equipartition Cv (known Third-Law limitation);
+    # the quantum vibrational/electronic modes freeze.
+    assert r.Cv_m == pytest.approx(2.5 * 8.314462618, rel=1e-9)
+
+
+def test_quantum_modes_freeze_at_low_T():
+    """Vibrational and electronic Cv -> 0 as T -> 0 (Third Law for the quantum modes)."""
+    from statthermopy.core.state import State
+    from statthermopy.partition import PartitionFunction
+
+    mol = get("N2")
+    pf = PartitionFunction(mol)
+    contribs = pf.contributions(State(T=1e-3, P=1e5))
+    assert contribs["vibrational"].Cv_m < 1e-6 * 8.314462618
+    assert contribs["electronic"].Cv_m < 1e-6 * 8.314462618
+
+
+def test_thermal_fields_grid_continuous_from_zero():
+    """property_vs_T over a grid starting at 0 K is finite on both the NumPy and the
+    accelerated paths, and the two agree at low temperature."""
+    import numpy as np
+
+    from statthermopy.backend import set_backend
+
+    mol = get("N2")
+    Ts = np.linspace(0.0, 2000.0, 400)
+    results = {}
+    for b in ("numpy", "numba"):
+        set_backend(b)
+        th = Thermodynamics(mol, State(T=300.0, P=1e5))
+        _, tv = th.property_vs_T("T_v", Ts, P=1e5)
+        _, tp = th.property_vs_T("T_p", Ts, P=1e5)
+        tv, tp = np.asarray(tv), np.asarray(tp)
+        assert np.isfinite(tv).all() and np.isfinite(tp).all(), b
+        assert tv[0] == 0.0 and tp[0] == 0.0
+        results[b] = (tv, tp)
+    set_backend("numpy")
+    assert np.allclose(results["numpy"][0], results["numba"][0], atol=1e-9)
+    assert np.allclose(results["numpy"][1], results["numba"][1], atol=1e-9)
+
+
+def test_plot_thermal_fields_from_zero():
+    """The combined thermal-field plot draws both curves starting at Tmin = 0 without NaN."""
+    import numpy as np
+
+    from statthermopy.plots import plot_thermal_fields
+
+    ax = plot_thermal_fields("N2", np.linspace(0.0, 1500.0, 200), P=1e5)
+    for line in ax.lines:
+        ys = line.get_ydata()
+        assert np.isfinite(np.asarray(ys)).all()
+    assert len(ax.lines) == 2
+
+
+def test_plot_mixture_thermal_fields_from_zero():
+    """Mixture thermal-field curves are continuous from 0 K too."""
+    import numpy as np
+
+    from statthermopy import IdealGasMixture
+    from statthermopy.plots import plot_mixture_thermal_fields
+
+    mix = IdealGasMixture.from_names({"N2": 0.78, "O2": 0.21, "Ar": 0.01})
+    ax = plot_mixture_thermal_fields(mix, np.linspace(0.0, 1500.0, 200), P=1e5)
+    for line in ax.lines:
+        assert np.isfinite(np.asarray(line.get_ydata())).all()
+    assert len(ax.lines) == 2
+
+
+def test_export_at_zero_kelvin_is_safe():
+    """Exporting a T = 0 result (where S_m -> -inf) must not break YAML/CSV/JSON."""
+    import os
+    import tempfile
+
+    from statthermopy.io import Exporter
+
+    res = Thermodynamics(get("N2"), State(T=0.0, P=1e5)).compute()
+    d = tempfile.mkdtemp()
+    for fmt in ("yaml", "csv", "json"):
+        p = os.path.join(d, f"out.{fmt}")
+        getattr(Exporter(res), f"to_{fmt}")(p)
+        assert os.path.getsize(p) > 0
 
 
 def test_plot_mixture_property_varies_with_T():

@@ -28,6 +28,7 @@ from ..io import Exporter
 from ..mixture import IdealGasMixture
 from ..plots import MOLAR_PROPS, PARTITION_PROPS, plot_property
 from ..thermodynamics import Thermodynamics
+from ..transport import TRANSPORT_PROPS, TRANSPORT_UNITS, TransportCalculator
 
 __all__ = ["StatThermoPyShell", "main"]
 
@@ -268,6 +269,76 @@ class StatThermoPyShell(Cmd):
             return
         print(f"  exported -> {path}")
 
+    def do_transport(self, arg: str) -> None:
+        """Transport properties of the selected gas.
+
+        ``transport``                      — print all properties at the current (T, P)
+        ``transport <prop> Tmin Tmax [N] [out.png]``
+                                          — plot a property vs T (saved to PNG)
+        ``transport binary N2 O2``         — binary diffusion D_ij at current (T, P)
+
+        Available props (use any single name): """ + ", ".join(TRANSPORT_PROPS) + """
+        """
+        if self.molecule is None:
+            print("  error: select a gas first, e.g.  gas N2")
+            return
+        parts = _split(arg)
+        if not parts:
+            st = self._make_state()
+            if st is None:
+                return
+            self._print_transport(self.molecule, st)
+            return
+        if parts[0] == "binary":
+            self._transport_binary(parts[1:])
+            return
+        prop = parts[0]
+        if prop not in TRANSPORT_PROPS:
+            print(f"  error: unknown property {prop!r}. Choose from: {', '.join(TRANSPORT_PROPS)}")
+            return
+        Tmin = float(parts[1]) if len(parts) > 1 else 300.0
+        Tmax = float(parts[2]) if len(parts) > 2 else 1500.0
+        npts = int(float(parts[3])) if len(parts) > 3 else 100
+        out = parts[4] if len(parts) > 4 else f"{self.molecule.name}_transport_{prop}.png"
+        P = self.P if self.P is not None else 101325.0
+        import numpy as np
+
+        from ..transport.plots import plot_transport_vs_T
+        Ts = np.linspace(Tmin, Tmax, npts)
+        ax = plot_transport_vs_T(self.molecule, prop, Ts, P=P)
+        ax.figure.savefig(out, dpi=120, bbox_inches="tight")
+        print(f"  saved plot -> {out}")
+
+    def _transport_binary(self, tokens: list[str]) -> None:
+        """Print the binary diffusion coefficient D_ij of two gases at the current (T, P)."""
+        from ..transport import binary_diffusion
+        if len(tokens) < 2:
+            print("  usage: transport binary <gasA> <gasB>")
+            return
+        st = self._make_state()
+        if st is None:
+            return
+        T = self.T
+        P = self.P if self.P is not None else 101325.0
+        try:
+            mol_i = get(tokens[0])
+            mol_j = get(tokens[1])
+        except KeyError as exc:
+            print(f"  error: {exc}")
+            return
+        D = binary_diffusion(mol_i, mol_j, T, P)
+        print(f"  D({tokens[0]},{tokens[1]}) @ T={T:.2f} K, P={P:.4g} Pa = {D:.6e} m^2/s")
+
+    @staticmethod
+    def _print_transport(mol, st: State) -> None:
+        """Pretty-print all transport properties of ``mol`` at state ``st``."""
+        res = TransportCalculator(mol, st).compute()
+        print(f"  Transport properties — {mol.name} @ T={res.T:.4f} K, P={res.P:.6g} Pa")
+        for prop in TRANSPORT_PROPS:
+            val = getattr(res, prop)
+            unit = TRANSPORT_UNITS.get(prop, "")
+            print(f"    {prop:8s} = {val:14.6g}  {unit}")
+
     def do_quit(self, _arg: str) -> bool:
         """Exit the terminal."""
         print("  goodbye.")
@@ -335,6 +406,39 @@ def _run_one_shot(args: argparse.Namespace) -> None:
         print(f"  exported -> {path}")
 
 
+def _run_transport(args: argparse.Namespace) -> None:
+    """One-shot transport computation: print a property (or all) at (T, P), optionally plot."""
+    import numpy as np
+
+    from ..transport import binary_diffusion
+    from ..transport.plots import plot_transport_vs_T
+
+    if args.binary:
+        mol_i = get(args.binary[0])
+        mol_j = get(args.binary[1])
+        D = binary_diffusion(mol_i, mol_j, args.T, args.P)
+        print(f"  D({args.binary[0]},{args.binary[1]}) @ T={args.T:.2f} K, P={args.P:.4g} Pa "
+              f"= {D:.6e} m^2/s")
+        return
+    mol = get(args.gas)
+    st = State(T=args.T, P=args.P)
+    res = TransportCalculator(mol, st).compute()
+    if args.prop:
+        if args.prop not in TRANSPORT_PROPS:
+            print(f"  error: unknown property {args.prop!r}. Choose from: {', '.join(TRANSPORT_PROPS)}")
+            return
+        print(f"  {args.prop}({mol.name}) @ T={res.T:.2f} K, P={res.P:.4g} Pa "
+              f"= {getattr(res, args.prop):.6g} {TRANSPORT_UNITS.get(args.prop, '')}")
+    else:
+        StatThermoPyShell._print_transport(mol, st)
+    if args.png:
+        prop = args.prop or "mu"
+        Ts = np.linspace(args.Tmin, args.Tmax, args.N)
+        ax = plot_transport_vs_T(mol, prop, Ts, P=args.P)
+        ax.figure.savefig(args.png, dpi=120, bbox_inches="tight")
+        print(f"  saved plot -> {args.png}")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="statthermopy", description="StatThermoPy CLI.")
     sub = p.add_subparsers(dest="command")
@@ -352,6 +456,20 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--basis", default="mole", choices=["mole", "mass"])
     run.add_argument("--export", nargs=2, metavar=("FMT", "PATH"),
                      help="export result, e.g. csv out.csv")
+
+    # one-shot transport
+    tr = sub.add_parser("transport", help="one-shot transport properties")
+    tr.add_argument("--gas", required=True, help="gas name")
+    tr.add_argument("--T", type=float, default=300.0, help="temperature (K)")
+    tr.add_argument("--P", type=float, default=101325.0, help="pressure (Pa)")
+    tr.add_argument("--prop", help=f"property to report; default = all. One of: {', '.join(TRANSPORT_PROPS)}")
+    tr.add_argument("--binary", nargs=2, metavar=("GAS_A", "GAS_B"),
+                    help="binary diffusion D_ij of two gases (overrides --prop)")
+    tr.add_argument("--Tmin", type=float, default=300.0, help="plot range start (K)")
+    tr.add_argument("--Tmax", type=float, default=1500.0, help="plot range end (K)")
+    tr.add_argument("--N", type=int, default=100, help="number of plot points")
+    tr.add_argument("--png", help="save a property-vs-T plot to this path")
+
     return p
 
 
@@ -361,6 +479,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "run":
         _run_one_shot(args)
+        return 0
+    if args.command == "transport":
+        _run_transport(args)
         return 0
     # default: interactive REPL
     try:

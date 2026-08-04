@@ -87,6 +87,13 @@ class Rotational(Mode):
     def ln_q(self, state: ResolvedState) -> float:
         if self.kind == "monoatomic":
             return 0.0
+        if state.T == 0.0:
+            # Classical rotor: ln Q_r -> -inf as T -> 0 (the classical rigid rotor
+            # has no low-T limit — it is invalid below ~θ_rot, which is why a quantum
+            # rotor is offered). The quantum linear rotor at T = 0 has q = 1.
+            if self.kind == "linear" and self.use_quantum:
+                return 0.0
+            return float("-inf")
         if self.kind == "linear":
             if self.use_quantum:
                 return math.log(self._q_linear_quantum(state.T))
@@ -101,6 +108,10 @@ class Rotational(Mode):
     def d_ln_q_dT(self, state: ResolvedState) -> float:
         if self.kind == "monoatomic":
             return 0.0
+        if state.T == 0.0:
+            # U_m = R T^2 d_ln_q_dT -> 0 as T -> 0 regardless of the (singular) d_ln_q_dT,
+            # so return 0 here to keep U_m = 0 without a 1/0 division.
+            return 0.0
         if self.kind == "linear" and self.use_quantum:
             T = state.T
             theta = self.theta_rot[0]
@@ -113,6 +124,13 @@ class Rotational(Mode):
     def cv_m(self, state: ResolvedState) -> float:
         if self.kind == "monoatomic":
             return 0.0
+        if state.T == 0.0:
+            # Quantum linear rotor freezes (Cv -> 0, Third Law). The classical rotor
+            # keeps its equipartition value (R / 1.5 R) at T = 0 — a known limitation of
+            # the classical model, which does not satisfy the Third Law for rotation.
+            if self.kind == "linear":
+                return 0.0 if self.use_quantum else R
+            return 1.5 * R
         if self.kind == "linear":
             if self.use_quantum:
                 T = state.T
@@ -168,7 +186,9 @@ class Rotational(Mode):
         Cv = self.cv_m(state)
         U_m = R * state.T * state.T * dlnq
         S_m = R * (lnq + state.T * dlnq)
-        A_m = -R * state.T * lnq
+        # At T = 0 the classical ln_q -> -inf; A_m = -R T ln_q would be 0 * (-inf) = NaN,
+        # but the limit is 0 (the T factor drives it to zero). Force it finite there.
+        A_m = 0.0 if state.T == 0.0 else -R * state.T * lnq
         return Contribution(
             name=self.name, ln_q=lnq, d_ln_q_dT=dlnq, U_m=U_m, S_m=S_m, A_m=A_m, Cv_m=Cv
         )

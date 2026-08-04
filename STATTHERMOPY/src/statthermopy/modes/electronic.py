@@ -56,8 +56,15 @@ class Electronic(Mode):
     # -- populations ----------------------------------------------------------
 
     def populations(self, T: float):
-        """Boltzmann populations ``p_j`` of each electronic state at temperature ``T``."""
+        """Boltzmann populations ``p_j`` of each electronic state at temperature ``T``.
+
+        At ``T = 0`` only the ground state(s) (``θ_j = 0``) are populated; every excited state
+        has population 0 (Third Law: the electronic heat capacity vanishes).
+        """
         be = get_backend()
+        if T == 0.0:
+            w = self.g * (self.theta == 0.0)
+            return w / be.sum(w)
         w = self.g * be.exp(-self.theta / T)
         return w / be.sum(w)
 
@@ -65,9 +72,14 @@ class Electronic(Mode):
 
     def ln_q(self, state: ResolvedState) -> float:
         be = get_backend()
+        if state.T == 0.0:
+            # Only ground-state term(s) survive: ln Q_e = ln Σ_{θ_j=0} g_j.
+            return float(be.log(be.sum(self.g * (self.theta == 0.0))))
         return float(be.log(be.sum(self.g * be.exp(-self.theta / state.T))))
 
     def d_ln_q_dT(self, state: ResolvedState) -> float:
+        if state.T == 0.0:
+            return 0.0
         be = get_backend()
         T = state.T
         w = self.g * be.exp(-self.theta / T)
@@ -76,6 +88,8 @@ class Electronic(Mode):
         return mean_theta / (T * T)
 
     def cv_m(self, state: ResolvedState) -> float:
+        if state.T == 0.0:
+            return 0.0
         be = get_backend()
         T = state.T
         w = self.g * be.exp(-self.theta / T)
@@ -89,6 +103,13 @@ class Electronic(Mode):
     def contribution(self, state: ResolvedState) -> Contribution:
         be = get_backend()
         T = state.T
+        if T == 0.0:
+            # Ground state only: U = 0, Cv = 0, S = R ln(Σ g_ground), A = 0.
+            lnq = float(be.log(be.sum(self.g * (self.theta == 0.0))))
+            return Contribution(
+                name=self.name, ln_q=lnq, d_ln_q_dT=0.0,
+                U_m=0.0, S_m=R * lnq, A_m=0.0, Cv_m=0.0,
+            )
         w = self.g * be.exp(-self.theta / T)
         q = be.sum(w)
         lnq = float(be.log(q))

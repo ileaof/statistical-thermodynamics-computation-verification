@@ -45,3 +45,8 @@ internal_rotors:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Shimanouchi (1972) gas-phase fundamentals via NIST WebBook. Methyl torsions as hindered rotors (V3=1190 cm-1, F=5.3 cm-1). Nonlinear asymmetric top, sigma=2; 25 oscillators + 2 internal rotors = 27."
+
+lennard_jones:
+  sigma_angstrom: 5.118
+  epsilon_over_k: 237.1
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

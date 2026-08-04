@@ -11,6 +11,7 @@ serialise them.
 from __future__ import annotations
 
 import json
+import math
 import csv as csvlib
 from pathlib import Path
 from typing import Any
@@ -25,15 +26,23 @@ __all__ = ["Exporter"]
 
 
 def _native(value: Any) -> Any:
-    """Convert numpy scalars/arrays to native Python types for safe serialisation."""
+    """Convert numpy scalars/arrays to native Python types for safe serialisation.
+
+    Non-finite floats (``±inf`` / ``NaN``) are mapped to ``None`` so that the result can be
+    written to strict formats such as YAML. This only arises at the singular ``T = 0`` point
+    of the classical ideal gas (e.g. ``S_m -> -inf``); every other state is finite.
+    """
     if isinstance(value, np.generic):
-        return value.item()
+        v = value.item()
+        return None if isinstance(v, float) and not math.isfinite(v) else v
     if isinstance(value, np.ndarray):
         return [_native(v) for v in value.tolist()]
     if isinstance(value, dict):
         return {k: _native(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_native(v) for v in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
     return value
 
 

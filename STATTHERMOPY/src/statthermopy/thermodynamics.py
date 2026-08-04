@@ -62,6 +62,8 @@ class ThermoProperties:
     Cv_m: float
     Cp_m: float
     gamma: float
+    T_v: float       # constant-volume thermal field, U_m / Cv_m (K)
+    T_p: float       # constant-pressure thermal field, H_m / Cp_m (K)
     mu_m: float
     R_molar: float
 
@@ -143,6 +145,13 @@ class Thermodynamics:
         G_m = A_m + R * T
         Cp_m = Cv_m + R
         gamma = Cp_m / Cv_m
+        # Thermal fields: characteristic temperatures U_m/Cv_m and H_m/Cp_m (K). Evaluated
+        # continuously down to T = 0, where U_m -> 0 so T_v, T_p -> 0 (well-behaved). Note
+        # the classical translational/rotational Cv do NOT vanish at T = 0 (only the
+        # quantum vibrational/electronic modes, and the quantum rotor when enabled, satisfy
+        # the Third Law); this is a known limitation of the classical ideal-gas model.
+        T_v = U_m / Cv_m
+        T_p = H_m / Cp_m
         mu_m = G_m
 
         M = self.molecule.molar_mass
@@ -176,7 +185,7 @@ class Thermodynamics:
         return ThermoProperties(
             T=T, P=rs.P, V=rs.V, n=n, m=rs.m, molar_mass=M,
             U_m=U_m, H_m=H_m, S_m=S_m, A_m=A_m, G_m=G_m,
-            Cv_m=Cv_m, Cp_m=Cp_m, gamma=gamma, mu_m=mu_m, R_molar=R,
+            Cv_m=Cv_m, Cp_m=Cp_m, gamma=gamma, T_v=T_v, T_p=T_p, mu_m=mu_m, R_molar=R,
             U_s=U_s, H_s=H_s, S_s=S_s, A_s=A_s, G_s=G_s,
             Cv_s=Cv_s, Cp_s=Cp_s, R_specific=R_specific,
             U=U, H=H, S=S, A=A, G=G, Cv=Cv, Cp=Cp,
@@ -194,7 +203,8 @@ class Thermodynamics:
     #: (notably ``"contributions"``, a nested dict) falls back to the per-T Python path.
     _GRID_DERIVABLE: frozenset[str] = frozenset({
         "T", "P", "V", "n", "m", "molar_mass",
-        "U_m", "H_m", "S_m", "A_m", "G_m", "Cv_m", "Cp_m", "gamma", "mu_m", "R_molar",
+        "U_m", "H_m", "S_m", "A_m", "G_m", "Cv_m", "Cp_m", "gamma", "T_v", "T_p",
+        "mu_m", "R_molar",
         "U_s", "H_s", "S_s", "A_s", "G_s", "Cv_s", "Cp_s", "R_specific",
         "U", "H", "S", "A", "G", "Cv", "Cp",
         "Qt", "Qr", "Qv", "Qe", "Qtotal",
@@ -231,7 +241,8 @@ class Thermodynamics:
             "T": T, "P": np.full_like(T, P), "V": V, "n": np.ones_like(T),
             "m": np.full_like(T, M), "molar_mass": np.full_like(T, M),
             "U_m": U_m, "H_m": H_m, "S_m": S_m, "A_m": A_m, "G_m": G_m,
-            "Cv_m": Cv_m, "Cp_m": Cp_m, "gamma": gamma, "mu_m": G_m, "R_molar": np.full_like(T, R),
+            "Cv_m": Cv_m, "Cp_m": Cp_m, "gamma": gamma, "T_v": U_m / Cv_m, "T_p": H_m / Cp_m,
+            "mu_m": G_m, "R_molar": np.full_like(T, R),
             "U_s": U_m / M, "H_s": H_m / M, "S_s": S_m / M, "A_s": A_m / M, "G_s": G_m / M,
             "Cv_s": Cv_m / M, "Cp_s": Cp_m / M, "R_specific": np.full_like(T, R / M),
             # extensive totals with n = 1 mol (the default for property_vs_T): equal to molar

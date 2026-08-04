@@ -22,7 +22,14 @@ from enum import Enum
 
 from ..units import molar_mass_gmol_to_kgmol
 
-__all__ = ["Geometry", "VibrationalMode", "InternalRotor", "ElectronicLevel", "Molecule"]
+__all__ = [
+    "Geometry",
+    "VibrationalMode",
+    "InternalRotor",
+    "ElectronicLevel",
+    "LennardJones",
+    "Molecule",
+]
 
 
 class Geometry(str, Enum):
@@ -104,6 +111,60 @@ class InternalRotor:
 
 
 @dataclass(frozen=True)
+class LennardJones:
+    """Lennard–Jones 12-6 potential parameters for a species.
+
+    These are *molecular* potential parameters (the collision diameter ``σ`` and well depth
+    ``ε``), on the same footing as the moments of inertia: they characterise the intermolecular
+    pair potential
+
+    .. math:: u(r) = 4\\varepsilon\\bigl[(\\sigma/r)^{12} - (\\sigma/r)^{6}\\bigr]
+
+    used by the Chapman–Enskog kinetic theory (:mod:`statthermopy.transport`) to derive the
+    transport properties (viscosity, thermal conductivity, diffusion) from first principles. They
+    are **not** thermodynamic property data and **not** an empirical equation of state — they are
+    the inputs to the dilute-gas collision integrals, exactly as the spectroscopic constants are
+    the inputs to the partition function.
+
+    The values are the standard viscosity-derived LJ parameters (Svehla 1962 / Hirschfelder,
+    Curtiss & Bird / Poling, Prausnitz & O'Connell). For polar species (H₂O, NH₃, H₂S, SO₂) the LJ
+    potential is an approximation and the transport predictions carry larger uncertainty.
+
+    Attributes
+    ----------
+    sigma_angstrom : float
+        Collision diameter ``σ`` in Å (1 Å = 1e-10 m).
+    epsilon_over_k : float
+        Well depth divided by Boltzmann's constant, ``ε/k_B``, in K (the Lennard–Jones
+        characteristic temperature).
+    note : str
+        Provenance / reliability flag (e.g. source, or "polar — LJ approximate").
+    """
+
+    sigma_angstrom: float
+    epsilon_over_k: float
+    note: str = ""
+
+    def __post_init__(self) -> None:
+        if self.sigma_angstrom <= 0:
+            raise ValueError("Lennard–Jones sigma must be > 0 Å.")
+        if self.epsilon_over_k <= 0:
+            raise ValueError("Lennard–Jones epsilon/k_B must be > 0 K.")
+
+    @property
+    def sigma_m(self) -> float:
+        """Collision diameter in metres."""
+        return self.sigma_angstrom * 1.0e-10
+
+    @property
+    def epsilon(self) -> float:
+        """Well depth ``ε = (ε/k_B) k_B`` in joules."""
+        from ..constants import k_B
+
+        return self.epsilon_over_k * k_B
+
+
+@dataclass(frozen=True)
 class ElectronicLevel:
     """An electronic term: energy relative to the ground state and its degeneracy.
 
@@ -157,6 +218,11 @@ class Molecule:
     electronic_levels : tuple[ElectronicLevel, ...]
         Electronic terms with the ground state first (energy 0). Defaults to a single
         non-degenerate ground state if not specified.
+    lennard_jones : LennardJones | None
+        Lennard–Jones potential parameters (σ, ε/k_B) used by the Chapman–Enskog transport
+        module (:mod:`statthermopy.transport`) to derive viscosity, thermal conductivity and
+        diffusion. ``None`` for species without LJ data; the thermodynamic properties remain
+        available either way.
     """
 
     name: str
@@ -169,6 +235,7 @@ class Molecule:
     vibrational_modes: tuple[VibrationalMode, ...] = field(default_factory=tuple)
     internal_rotors: tuple[InternalRotor, ...] = field(default_factory=tuple)
     electronic_levels: tuple[ElectronicLevel, ...] = field(default_factory=tuple)
+    lennard_jones: LennardJones | None = None
 
     def __post_init__(self) -> None:
         # frozen dataclass: use object.__setattr__ to derive SI molar mass.
@@ -260,6 +327,11 @@ class Molecule:
     def ground_state_degeneracy(self) -> int:
         """Degeneracy of the electronic ground state."""
         return self.electronic_levels[0].degeneracy
+
+    @property
+    def has_lennard_jones(self) -> bool:
+        """``True`` if Lennard–Jones parameters are available (transport properties)."""
+        return self.lennard_jones is not None
 
     def __repr__(self) -> str:
         return (

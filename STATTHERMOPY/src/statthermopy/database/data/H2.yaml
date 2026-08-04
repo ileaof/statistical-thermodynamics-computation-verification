@@ -10,3 +10,8 @@ vibrational_modes:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Ground X1Sigma_g+; theta_rot=85.3 K."
+
+lennard_jones:
+  sigma_angstrom: 2.827
+  epsilon_over_k: 59.7
+  note: "Poling/PCO; quantum fluid - LJ approximate"

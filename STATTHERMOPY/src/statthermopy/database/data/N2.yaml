@@ -10,3 +10,8 @@ vibrational_modes:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Ground X1Sigma_g+; theta_rot=2.878 K."
+
+lennard_jones:
+  sigma_angstrom: 3.798
+  epsilon_over_k: 71.4
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

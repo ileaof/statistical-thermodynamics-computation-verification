@@ -13,3 +13,8 @@ vibrational_modes:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Nonlinear, sigma=2."
+
+lennard_jones:
+  sigma_angstrom: 3.623
+  epsilon_over_k: 301.1
+  note: "Poling/PCO; polar - LJ approximate"

@@ -30,3 +30,8 @@ internal_rotors:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Fundamentals: NIST CCCDB / Herzberg. C-C torsion as hindered rotor (V3=1024 cm-1, F=10.7 cm-1, Weiss & Leroi 1968; JANAF). Nonlinear (D3d), sigma=6; 17 oscillators + 1 internal rotor = 18."
+
+lennard_jones:
+  sigma_angstrom: 4.443
+  epsilon_over_k: 215.7
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

@@ -58,10 +58,11 @@ def test_gui_main_is_callable():
 
 
 def test_window_constructs_with_tabs(win):
-    assert win._tabs.count() == 3
+    assert win._tabs.count() == 4
     assert win._tabs.tabText(0) == "Properties"
     assert win._tabs.tabText(1) == "Plot"
-    assert win._tabs.tabText(2) == "Validate"
+    assert win._tabs.tabText(2) == "Transport"
+    assert win._tabs.tabText(3) == "Validate"
 
 
 def test_compute_pure_gas_populates_results(win):
@@ -185,6 +186,34 @@ def test_plot_tab_renders(win):
     assert len(win.plot_canvas.figure.axes) == 1
     ax = win.plot_canvas.figure.axes[0]
     assert ax.has_data()
+
+
+def test_thermal_fields_available_in_gui(win):
+    """The results table lists the thermal fields, and the Plot tab can draw both at once."""
+    win.gas_combo.setCurrentText("CO2")
+    win.T_spin.setValue(600.0)
+    win.P_spin.setValue(101325.0)
+    win._on_compute()
+    res = win._last_result
+    assert res.T_v == pytest.approx(res.U_m / res.Cv_m)
+    assert res.T_p == pytest.approx(res.H_m / res.Cp_m)
+    # both thermal-field rows appear in the results table (with K units)
+    prop_cells = [
+        win.results_table.item(r, 0).text()
+        for r in range(win.results_table.rowCount())
+        if win.results_table.item(r, 0) is not None
+    ]
+    assert any("T_v" in c for c in prop_cells) and any("T_p" in c for c in prop_cells)
+
+    # the combined thermal-fields plot draws two curves
+    win.plot_prop.setCurrentText("T_v & T_p (thermal fields)")
+    win.plot_tmin.setValue(300.0)
+    win.plot_tmax.setValue(1500.0)
+    win.plot_npts.setValue(15)
+    win._on_plot()
+    ax = win.plot_canvas.figure.axes[0]
+    assert len(ax.lines) == 2
+    assert len({ln.get_color() for ln in ax.lines}) == 2
 
 
 def test_plot_tab_uses_mixture_in_mixture_mode(win):
@@ -334,3 +363,95 @@ def test_theme_helpers():
     assert isinstance(theme.default_font(), QFont)
     # detect_dark runs against the live (offscreen) app and returns a plain bool
     assert isinstance(theme.detect_dark(), bool)
+
+
+# -- Transport tab --------------------------------------------------------------
+
+
+def test_transport_compute_populates_table(win):
+    """Point evaluation fills the results table with all 13 transport properties."""
+    from statthermopy.transport import TRANSPORT_PROPS
+
+    win.transport_species.setCurrentText("N2")
+    win.transport_T.setValue(300.0)
+    win.transport_P.setValue(101325.0)
+    win._on_transport_compute()
+    assert win.transport_table.rowCount() == len(TRANSPORT_PROPS)
+    # viscosity of N2 @ 300 K ~ 1.8e-5 Pa·s (row labelled "mu")
+    labels = [win.transport_table.item(r, 0).text() for r in range(win.transport_table.rowCount())]
+    assert "mu" in labels
+    mu_row = labels.index("mu")
+    mu_val = float(win.transport_table.item(mu_row, 1).text())
+    assert mu_val == pytest.approx(1.77e-5, rel=0.05)
+    assert win._transport_last is not None
+
+
+def test_transport_plot_vs_t_renders(win):
+    """A vs-T curve plots without exception and the canvas carries data."""
+    win.transport_species.setCurrentText("N2")
+    win.transport_mode.setCurrentText("vs T")
+    # select only the first property (mu) — clear then reselect
+    for i in range(win.transport_props.count()):
+        win.transport_props.item(i).setSelected(i == 0)
+    win.transport_tmin.setValue(300.0)
+    win.transport_tmax.setValue(1000.0)
+    win.transport_pmin.setValue(101325.0)
+    win.transport_pmax.setValue(101325.0)
+    win.transport_npts.setValue(20)
+    win._on_transport_plot()
+    ax = win.transport_canvas.figure.axes[0]
+    assert ax.has_data()
+    assert len(ax.lines) == 1
+
+
+def test_transport_plot_map_renders(win):
+    """A 2-D map builds a pcolormesh and records the map params for Tecplot export."""
+    win.transport_species.setCurrentText("N2")
+    win.transport_mode.setCurrentText("2-D map")
+    for i in range(win.transport_props.count()):
+        win.transport_props.item(i).setSelected(i == 0)
+    win.transport_tmin.setValue(300.0)
+    win.transport_tmax.setValue(800.0)
+    win.transport_pmin.setValue(1e3)
+    win.transport_pmax.setValue(1e6)
+    win.transport_npts.setValue(12)
+    win._on_transport_plot()
+    assert win._transport_map is not None
+    ax = win.transport_canvas.figure.axes[0]
+    assert ax.has_data()
+
+
+def test_transport_export_writes_files(win, tmp_path, monkeypatch):
+    """CSV (point eval) and Tecplot (2-D map) export buttons write files."""
+    # point eval -> CSV
+    win.transport_species.setCurrentText("N2")
+    win.transport_T.setValue(300.0)
+    win.transport_P.setValue(101325.0)
+    win._on_transport_compute()
+    csv_target = tmp_path / "transport.csv"
+    monkeypatch.setattr(
+        "statthermopy.gui.mainwindow.QFileDialog.getSaveFileName",
+        lambda *a, **k: (str(csv_target), ""),
+    )
+    win.transport_csv_btn.click()
+    assert csv_target.exists()
+    assert "mu" in csv_target.read_text(encoding="utf-8")
+
+    # 2-D map -> Tecplot
+    win.transport_mode.setCurrentText("2-D map")
+    for i in range(win.transport_props.count()):
+        win.transport_props.item(i).setSelected(i == 0)
+    win.transport_tmin.setValue(300.0)
+    win.transport_tmax.setValue(600.0)
+    win.transport_pmin.setValue(1e3)
+    win.transport_pmax.setValue(1e5)
+    win.transport_npts.setValue(10)
+    win._on_transport_plot()
+    dat_target = tmp_path / "transport.dat"
+    monkeypatch.setattr(
+        "statthermopy.gui.mainwindow.QFileDialog.getSaveFileName",
+        lambda *a, **k: (str(dat_target), ""),
+    )
+    win.transport_dat_btn.click()
+    assert dat_target.exists()
+    assert "VARIABLES" in dat_target.read_text(encoding="utf-8")

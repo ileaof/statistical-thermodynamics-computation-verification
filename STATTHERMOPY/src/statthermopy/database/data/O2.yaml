@@ -12,3 +12,8 @@ electronic_levels:
   - {energy_cm1: 7918.1, degeneracy: 2}
   - {energy_cm1: 13195.1, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Ground X3Sigma_g- (g=3); a1Delta_g at 7918 cm-1 (g=2); b1Sigma_g+ at 13195 cm-1 (g=1)."
+
+lennard_jones:
+  sigma_angstrom: 3.467
+  epsilon_over_k: 106.7
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

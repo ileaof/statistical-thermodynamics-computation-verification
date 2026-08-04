@@ -12,3 +12,8 @@ vibrational_modes:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Linear, heteronuclear sigma=1; theta_rot=0.603 K."
+
+lennard_jones:
+  sigma_angstrom: 3.828
+  epsilon_over_k: 232.4
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

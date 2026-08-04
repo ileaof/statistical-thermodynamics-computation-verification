@@ -10,3 +10,8 @@ vibrational_modes:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Ground X1Sigma+; heteronuclear sigma=1."
+
+lennard_jones:
+  sigma_angstrom: 3.69
+  epsilon_over_k: 91.7
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QButtonGroup,
     QCheckBox,
@@ -30,6 +31,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -53,24 +56,29 @@ from ..plots import (
     MOLAR_PROPS,
     PARTITION_PROPS,
     plot_mixture_property,
+    plot_mixture_thermal_fields,
     plot_property,
+    plot_thermal_fields,
 )
 from ..thermodynamics import Thermodynamics
 from ..validation import list_references, validate
 
 __all__ = ["StatThermoPyWindow"]
 
-#: molar property rows shown in the results table.
-_MOLAR_ROWS = ["U_m", "H_m", "S_m", "A_m", "G_m", "Cv_m", "Cp_m", "gamma", "mu_m"]
+#: molar property rows shown in the results table (T_v/T_p are the thermal fields, in K).
+_MOLAR_ROWS = ["U_m", "H_m", "S_m", "A_m", "G_m", "Cv_m", "Cp_m", "gamma", "T_v", "T_p", "mu_m"]
 #: massic (per-kg) property rows shown in the results table.
 _MASSIC_ROWS = ["U_s", "H_s", "S_s", "A_s", "G_s", "Cv_s", "Cp_s", "R_specific"]
 _UNITS = {
     "U_m": "J/mol", "H_m": "J/mol", "A_m": "J/mol", "G_m": "J/mol", "mu_m": "J/mol",
     "S_m": "J/mol/K", "Cv_m": "J/mol/K", "Cp_m": "J/mol/K", "gamma": "-",
+    "T_v": "K", "T_p": "K",
     "U_s": "J/kg", "H_s": "J/kg", "A_s": "J/kg", "G_s": "J/kg", "S_s": "J/kg/K",
     "Cv_s": "J/kg/K", "Cp_s": "J/kg/K", "R_specific": "J/kg/K",
 }
 _MODE_COLS = ["ln_q", "U_m", "S_m", "A_m", "Cv_m"]
+#: Special Plot-tab entry that overlays both thermal fields (T_v and T_p) on one axes.
+_THERMAL_FIELDS_ITEM = "T_v & T_p (thermal fields)"
 _VALIDATION_TOL_PERCENT = 5.0
 
 
@@ -145,6 +153,7 @@ class StatThermoPyWindow(QMainWindow):
         tabs = QTabWidget(self)
         tabs.addTab(self._build_properties_tab(), "Properties")
         tabs.addTab(self._build_plot_tab(), "Plot")
+        tabs.addTab(self._build_transport_tab(), "Transport")
         tabs.addTab(self._build_validate_tab(), "Validate")
         self.setCentralWidget(tabs)
         self._tabs = tabs
@@ -154,7 +163,7 @@ class StatThermoPyWindow(QMainWindow):
         # sensible defaults
         self.T_spin.setValue(298.15)
         self.P_spin.setValue(101325.0)
-        self.plot_tmin.setValue(300.0)
+        self.plot_tmin.setValue(0.0)
         self.plot_tmax.setValue(1500.0)
         self.plot_npts.setValue(100)
         self.plot_p.setValue(101325.0)
@@ -311,12 +320,12 @@ class StatThermoPyWindow(QMainWindow):
         ctrl.setContentsMargins(10, 8, 10, 8)
         ctrl.setSpacing(8)
         self.plot_prop = QComboBox()
-        for p in MOLAR_PROPS + PARTITION_PROPS:
+        for p in [*MOLAR_PROPS, *PARTITION_PROPS, _THERMAL_FIELDS_ITEM]:
             self.plot_prop.addItem(p)
         ctrl.addWidget(QLabel("Property:"))
         ctrl.addWidget(self.plot_prop)
-        self.plot_tmin = self._make_spin(1.0, 1.0e5, 300.0)
-        self.plot_tmax = self._make_spin(1.0, 1.0e5, 1500.0)
+        self.plot_tmin = self._make_spin(0.0, 1.0e5, 0.0)
+        self.plot_tmax = self._make_spin(0.0, 1.0e5, 1500.0)
         self.plot_npts = QSpinBox()
         self.plot_npts.setRange(2, 100000)
         self.plot_npts.setValue(100)
@@ -338,6 +347,156 @@ class StatThermoPyWindow(QMainWindow):
 
         self.plot_canvas = _PlotCanvas()
         lay.addWidget(self.plot_canvas, 1)
+        return tab
+
+    def _build_transport_tab(self) -> QWidget:
+        """Statistical Transport Properties tab.
+
+        Two stacked panels: a *point-evaluation* card (species, T, P → a results table of all
+        transport/thermophysical properties) and a *plot* card (mode ``vs T`` / ``vs P`` /
+        ``2-D map``, multi-property selection, ranges, Plot) above a ``_PlotCanvas``. Export
+        buttons cover CSV, Excel, Tecplot (2-D map), PNG and PDF. No physics is implemented here —
+        it wraps :class:`~statthermopy.transport.TransportCalculator` and the transport plots.
+        """
+        from ..transport import TRANSPORT_PROPS
+
+        tab = QWidget()
+        root = QHBoxLayout(tab)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
+
+        splitter = QSplitter(Qt.Horizontal)
+
+        # --- left column: point evaluation + results table -------------------
+        left = QWidget()
+        llay = QVBoxLayout(left)
+        llay.setContentsMargins(0, 0, 0, 0)
+        llay.setSpacing(10)
+
+        card1 = QFrame()
+        card1.setObjectName("Card")
+        c1 = QHBoxLayout(card1)
+        c1.setContentsMargins(10, 8, 10, 8)
+        c1.setSpacing(8)
+        self.transport_species = QComboBox()
+        for name in list_molecules():
+            self.transport_species.addItem(name)
+        c1.addWidget(QLabel("Species:"))
+        c1.addWidget(self.transport_species)
+        self.transport_T = self._make_spin(0.0, 1.0e5, 300.0)
+        self.transport_P = self._make_spin(0.0, 1.0e9, 101325.0)
+        c1.addWidget(QLabel("T (K):"))
+        c1.addWidget(self.transport_T)
+        c1.addWidget(QLabel("P (Pa):"))
+        c1.addWidget(self.transport_P)
+        self.transport_btn = QPushButton("Compute")
+        self.transport_btn.setProperty("primary", True)
+        self.transport_btn.clicked.connect(self._on_transport_compute)
+        c1.addWidget(self.transport_btn)
+        c1.addStretch()
+        llay.addWidget(card1)
+
+        self.transport_table = QTableWidget(0, 3, self)
+        self.transport_table.setAlternatingRowColors(True)
+        self.transport_table.setHorizontalHeaderLabels(["Property", "Value", "Unit"])
+        self.transport_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.transport_table.verticalHeader().setVisible(False)
+        llay.addWidget(self.transport_table, 1)
+        llay.addStretch(0)
+
+        # --- right column: plot controls + canvas ----------------------------
+        right = QWidget()
+        rlay = QVBoxLayout(right)
+        rlay.setContentsMargins(0, 0, 0, 0)
+        rlay.setSpacing(10)
+
+        # plot card — controls wrapped over two rows so nothing is squeezed
+        card2 = QFrame()
+        card2.setObjectName("Card")
+        c2 = QVBoxLayout(card2)
+        c2.setContentsMargins(10, 8, 10, 8)
+        c2.setSpacing(8)
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+        self.transport_mode = QComboBox()
+        self.transport_mode.addItems(["vs T", "vs P", "2-D map"])
+        row1.addWidget(QLabel("Mode:"))
+        row1.addWidget(self.transport_mode)
+        self.transport_props = QListWidget()
+        self.transport_props.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.transport_props.setMaximumHeight(64)
+        for p in TRANSPORT_PROPS:
+            QListWidgetItem(p, self.transport_props)
+        self.transport_props.item(0).setSelected(True)
+        row1.addWidget(QLabel("Property:"))
+        row1.addWidget(self.transport_props, 1)
+        self.transport_plot_btn = QPushButton("Plot")
+        self.transport_plot_btn.setProperty("primary", True)
+        self.transport_plot_btn.clicked.connect(self._on_transport_plot)
+        row1.addWidget(self.transport_plot_btn)
+        c2.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
+        self.transport_tmin = self._make_spin(0.0, 1.0e5, 300.0)
+        self.transport_tmax = self._make_spin(0.0, 1.0e5, 1500.0)
+        self.transport_pmin = self._make_spin(1.0, 1.0e9, 1e3)
+        self.transport_pmax = self._make_spin(1.0, 1.0e9, 1e7)
+        self.transport_npts = QSpinBox()
+        self.transport_npts.setRange(10, 100000)
+        self.transport_npts.setValue(50)
+        row2.addWidget(QLabel("Tmin:"))
+        row2.addWidget(self.transport_tmin)
+        row2.addWidget(QLabel("Tmax:"))
+        row2.addWidget(self.transport_tmax)
+        row2.addWidget(QLabel("Pmin:"))
+        row2.addWidget(self.transport_pmin)
+        row2.addWidget(QLabel("Pmax:"))
+        row2.addWidget(self.transport_pmax)
+        row2.addWidget(QLabel("N:"))
+        row2.addWidget(self.transport_npts)
+        row2.addStretch()
+        c2.addLayout(row2)
+        rlay.addWidget(card2)
+
+        # export row
+        exp_row = QHBoxLayout()
+        exp_row.setSpacing(6)
+        self.transport_csv_btn = QPushButton("Export CSV")
+        self.transport_xlsx_btn = QPushButton("Export Excel")
+        self.transport_dat_btn = QPushButton("Export Tecplot")
+        self.transport_png_btn = QPushButton("Export PNG")
+        self.transport_pdf_btn = QPushButton("Export PDF")
+        for b in (self.transport_csv_btn, self.transport_xlsx_btn, self.transport_dat_btn,
+                  self.transport_png_btn, self.transport_pdf_btn):
+            b.clicked.connect(self._on_transport_export)
+        exp_row.addWidget(self.transport_csv_btn)
+        exp_row.addWidget(self.transport_xlsx_btn)
+        exp_row.addWidget(self.transport_dat_btn)
+        exp_row.addWidget(self.transport_png_btn)
+        exp_row.addWidget(self.transport_pdf_btn)
+        exp_row.addStretch()
+        rlay.addLayout(exp_row)
+
+        self.transport_status = QLabel(
+            "Compute transport properties at (T, P), or plot curves / 2-D maps. "
+            "Dilute ideal gas: μ, k are T-only; ν, α, D scale as 1/P.")
+        self.transport_status.setWordWrap(True)
+        rlay.addWidget(self.transport_status)
+
+        self.transport_canvas = _PlotCanvas()
+        rlay.addWidget(self.transport_canvas, 1)
+
+        # assemble the splitter; give the plot (right) the larger share
+        splitter.addWidget(left)
+        splitter.addWidget(right)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([440, 660])
+        root.addWidget(splitter)
+
+        self._transport_last = None   # last TransportProperties (point eval, for CSV/Excel)
+        self._transport_map = None    # (prop, T_range, P_range, n) of the last 2-D map (Tecplot)
         return tab
 
     def _build_validate_tab(self) -> QWidget:
@@ -423,6 +582,9 @@ class StatThermoPyWindow(QMainWindow):
         self.compute_btn.setIcon(icons["check"])
         self.plot_btn.setIcon(icons["play"])
         self.val_btn.setIcon(icons["play"])
+        if hasattr(self, "transport_btn"):
+            self.transport_btn.setIcon(icons["check"])
+            self.transport_plot_btn.setIcon(icons["play"])
 
     def _apply_theme(self, mode: str) -> None:
         from . import theme
@@ -440,8 +602,14 @@ class StatThermoPyWindow(QMainWindow):
         for btn in (self.compute_btn, self.plot_btn, self.val_btn):
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+        if hasattr(self, "transport_btn"):
+            for btn in (self.transport_btn, self.transport_plot_btn):
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
         self.plot_canvas.apply_theme(palette)
         self.val_canvas.apply_theme(palette)
+        if hasattr(self, "transport_canvas"):
+            self.transport_canvas.apply_theme(palette)
 
     def _on_theme_chosen(self, choice: str) -> None:
         self._theme_choice = choice
@@ -481,6 +649,8 @@ class StatThermoPyWindow(QMainWindow):
             return
         current = self.plot_prop.currentText()
         props = (MOLAR_PROPS + PARTITION_PROPS) if pure else list(MIXTURE_PROPS)
+        # The combined thermal-fields view is available in both modes.
+        props = [*props, _THERMAL_FIELDS_ITEM]
         self.plot_prop.blockSignals(True)
         self.plot_prop.clear()
         for p in props:
@@ -639,12 +809,16 @@ class StatThermoPyWindow(QMainWindow):
         Ts = np.linspace(tmin, tmax, n)
         ax = self.plot_canvas.ax
         ax.clear()
+        thermal = prop == _THERMAL_FIELDS_ITEM
         if self.radio_mix.isChecked():
             mix = self._build_mixture()
             if mix is None:
                 QMessageBox.warning(self, "StatThermoPy", "Add at least one mixture component.")
                 return
-            plot_mixture_property(mix, prop, Ts, P=P, ax=ax, logy=prop in PARTITION_PROPS)
+            if thermal:
+                plot_mixture_thermal_fields(mix, Ts, P=P, ax=ax)
+            else:
+                plot_mixture_property(mix, prop, Ts, P=P, ax=ax, logy=prop in PARTITION_PROPS)
         else:
             mol = self._current_molecule()
             if mol is None:  # pragma: no cover - combo always has items
@@ -652,8 +826,154 @@ class StatThermoPyWindow(QMainWindow):
                     self, "StatThermoPy", "Select a species on the Properties tab."
                 )
                 return
-            plot_property(mol, prop, Ts, P=P, ax=ax, logy=prop in PARTITION_PROPS)
+            if thermal:
+                plot_thermal_fields(mol, Ts, P=P, ax=ax)
+            else:
+                plot_property(mol, prop, Ts, P=P, ax=ax, logy=prop in PARTITION_PROPS)
         self.plot_canvas.refresh()
+
+    # -- Transport tab ---------------------------------------------------------
+    def _on_transport_compute(self) -> None:
+        """Evaluate all transport/thermophysical properties at the chosen (T, P)."""
+        from ..transport import TRANSPORT_PROPS, TRANSPORT_UNITS, TransportCalculator
+
+        name = self.transport_species.currentText()
+        mol = get(name)
+        T = float(self.transport_T.value())
+        P = float(self.transport_P.value())
+        if not mol.has_lennard_jones:
+            QMessageBox.warning(self, "Transport",
+                                f"{name} has no Lennard–Jones parameters; cannot compute transport.")
+            return
+        try:
+            res = TransportCalculator(mol, State(T=T, P=P)).compute()
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Transport", f"Computation failed:\n{exc}")
+            return
+        self._transport_last = res
+        data = res.as_dict()
+        self.transport_table.setRowCount(len(TRANSPORT_PROPS))
+        for i, prop in enumerate(TRANSPORT_PROPS):
+            val = data.get(prop, float("nan"))
+            unit = TRANSPORT_UNITS.get(prop, "")
+            self.transport_table.setItem(i, 0, QTableWidgetItem(prop))
+            self.transport_table.setItem(i, 1, QTableWidgetItem(f"{val:.6g}"))
+            self.transport_table.setItem(i, 2, QTableWidgetItem(unit))
+        self.transport_status.setText(
+            f"{name} @ T={T:.2f} K, P={P:.4g} Pa — μ={res.mu:.4g} Pa·s, "
+            f"k={res.k:.4g} W/m·K, Pr={res.Pr:.3f}, a={res.a:.2f} m/s, Z={res.Z:.4f}")
+
+    def _on_transport_plot(self) -> None:
+        """Render the selected transport property/properties per the chosen mode."""
+        from ..transport import plots as tplots
+
+        name = self.transport_species.currentText()
+        mol = get(name)
+        if not mol.has_lennard_jones:
+            QMessageBox.warning(self, "Transport",
+                                f"{name} has no Lennard–Jones parameters; cannot compute transport.")
+            return
+        props = [it.text() for it in self.transport_props.selectedItems()]
+        if not props:
+            QMessageBox.warning(self, "Transport", "Select at least one property.")
+            return
+        mode = self.transport_mode.currentText()
+        T_range = (float(self.transport_tmin.value()), float(self.transport_tmax.value()))
+        P_range = (float(self.transport_pmin.value()), float(self.transport_pmax.value()))
+        # Only the axis that is actually swept must be a proper range; the other is a single
+        # constant (T for vs-P, P for vs-T). The 2-D map sweeps both.
+        if mode == "2-D map":
+            need_T = need_P = True
+        elif mode == "vs P":
+            need_T, need_P = False, True
+        else:  # vs T
+            need_T, need_P = True, False
+        if (need_T and T_range[0] >= T_range[1]) or (need_P and P_range[0] >= P_range[1]):
+            QMessageBox.warning(
+                self, "Transport",
+                "The swept axis must have max > min: Tmax>Tmin for 'vs T' / 2-D map, "
+                "Pmax>Pmin for 'vs P' / 2-D map.")
+            return
+        n = int(self.transport_npts.value())
+        ax = self.transport_canvas.ax
+        ax.clear()
+        try:
+            if mode == "2-D map":
+                if len(props) != 1:
+                    QMessageBox.warning(self, "Transport",
+                                       "2-D map uses a single property; plotting the first selection.")
+                    props = props[:1]
+                tplots.plot_transport_map(mol, props[0], T_range, P_range, n=n, ax=ax)
+                self._transport_map = (props[0], T_range, P_range, n)
+            elif mode == "vs P":
+                import numpy as np
+                Ps = np.linspace(P_range[0], P_range[1], n)
+                for prop in props:
+                    tplots.plot_transport_vs_P(mol, prop, Ps, T=T_range[0], ax=ax)
+                self._transport_map = None
+            else:  # vs T
+                import numpy as np
+                Ts = np.linspace(T_range[0], T_range[1], n)
+                if len(props) == 1:
+                    tplots.plot_transport_vs_T(mol, props[0], Ts,
+                                                P=P_range[0], ax=ax)
+                else:
+                    tplots.plot_transport_multi(mol, props, Ts, P=P_range[0], ax=ax)
+                self._transport_map = None
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Transport", f"Plot failed:\n{exc}")
+            return
+        self.transport_canvas.refresh()
+        self.transport_status.setText(
+            f"{mode}: {', '.join(props)} for {name} "
+            f"(T {T_range[0]:.0f}–{T_range[1]:.0f} K, P {P_range[0]:.3g}–{P_range[1]:.3g} Pa).")
+
+    def _on_transport_export(self) -> None:
+        """Export the current transport result(s): CSV/Excel from the point eval or 2-D map,
+        PNG/PDF from the canvas, Tecplot from the 2-D map."""
+        from ..transport import TransportCalculator as TC
+        from ..transport.export import write_tecplot_grid
+
+        label = self.sender().text()
+        ext = {"Export CSV": "csv", "Export Excel": "xlsx",
+               "Export Tecplot": "dat", "Export PNG": "png",
+               "Export PDF": "pdf"}[label]
+        path, _ = QFileDialog.getSaveFileName(self, f"Export {ext.upper()}", f"transport.{ext}")
+        if not path:  # pragma: no cover - user cancelled
+            return
+        try:
+            if ext == "png":
+                self.transport_canvas.figure.savefig(path, dpi=120, bbox_inches="tight")
+            elif ext == "pdf":
+                self.transport_canvas.figure.savefig(path, bbox_inches="tight")
+            elif ext == "dat":
+                if self._transport_map is None:
+                    QMessageBox.warning(self, "Transport",
+                                        "Tecplot export requires a 2-D map. Plot a map first.")
+                    return
+                prop, T_range, P_range, n = self._transport_map
+                import numpy as np
+                Ts = np.linspace(T_range[0], T_range[1], n)
+                Ps = np.linspace(P_range[0], P_range[1], n)
+                Z = np.empty((n, n))
+                for i, T in enumerate(Ts):
+                    for j, P in enumerate(Ps):
+                        Z[j, i] = getattr(TC(get(self.transport_species.currentText()),
+                                              State(T=float(T), P=float(P))).compute(), prop)
+                write_tecplot_grid(path, Ts, Ps, Z, title=f"{prop} map")
+            else:  # csv / xlsx — from point eval (as_dict) or last plotted curve
+                if self._transport_last is not None:
+                    from ..io import Exporter
+                    if ext == "csv":
+                        Exporter(self._transport_last).to_csv(path)
+                    else:
+                        Exporter(self._transport_last).to_excel(path)
+                else:
+                    QMessageBox.warning(self, "Transport",
+                                        "Compute a point evaluation first (Compute button).")
+                    return
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Transport", f"Export failed:\n{exc}")
 
     def _on_validate(self) -> None:
         species = self.val_species.currentText()

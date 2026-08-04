@@ -8,3 +8,8 @@ vibrational_modes: []
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "NIST CCCDB; closed-shell ground state 1S0, g=1."
+
+lennard_jones:
+  sigma_angstrom: 2.82
+  epsilon_over_k: 32.8
+  note: "Poling/PCO; quantum fluid - LJ approximate"

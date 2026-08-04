@@ -49,14 +49,23 @@ class Translational(Mode):
         entropy ``S = n S_m`` is then properly extensive (the ``n ln n`` Gibbs-paradox term
         is cancelled by the indistinguishability correction ``-ln N`` absorbed here via the
         ``-ln N_A + 1`` term combined with ``ln V_m``).
+
+        At ``T = 0`` the classical translational partition function collapses (``Q_t -> 0``,
+        ``ln Q_t -> -inf``); the Sackur–Tetrode entropy diverges, which is the well-known
+        failure of the *classical* ideal gas at low temperature (the Third Law is not
+        satisfied by the classical translational mode). ``U_m`` and ``Cv_m`` remain well
+        defined (``0`` and ``3/2 R``), so the thermal field ``T_v = U_m / Cv_m -> 0`` stays
+        finite and continuous.
         """
+        if state.T == 0.0:
+            return float("-inf")
         coeff = 2.0 * math.pi * self.molecular_mass * k_B / (h * h)
         V_molar = state.V / state.n
         return 1.5 * math.log(coeff * state.T) + math.log(V_molar)
 
     def d_ln_q_dT(self, state: ResolvedState) -> float:
         """``(d ln Q_t / dT)_V = 3 / (2 T)``."""
-        return 1.5 / state.T
+        return 0.0 if state.T == 0.0 else 1.5 / state.T
 
     def cv_m(self, state: ResolvedState) -> float:
         """``Cv_m,t = (3/2) R``."""
@@ -65,10 +74,20 @@ class Translational(Mode):
     # -- contribution (override to add the indistinguishability correction) -----
 
     def contribution(self, state: ResolvedState) -> Contribution:
-        lnq = self.ln_q(state)
-        dlnq = self.d_ln_q_dT(state)
         U_m = 1.5 * R * state.T
         Cv_m = 1.5 * R
+        if state.T == 0.0:
+            # T = 0 limit: U = 0, Cv = 3/2 R; ln_q and S diverge to -inf (classical ideal
+            # gas), A = 0 (the T factor kills the -R T ln_q term). Kept finite so the
+            # thermal-field path (U, Cv, H, Cp) stays NaN-free at T = 0.
+            lnq = float("-inf")
+            S_m = float("-inf")
+            A_m = 0.0
+            return Contribution(
+                name=self.name, ln_q=lnq, d_ln_q_dT=0.0, U_m=U_m, S_m=S_m, A_m=A_m, Cv_m=Cv_m
+            )
+        lnq = self.ln_q(state)
+        dlnq = self.d_ln_q_dT(state)
         # Sackur-Tetrode: S_m = R [ ln Q_t + T (d ln Q_t/dT) - ln N_A + 1 ].
         S_m = R * (lnq + state.T * dlnq - math.log(N_A) + 1.0)
         # A_m = -R T [ ln Q_t - ln N_A + 1 ].

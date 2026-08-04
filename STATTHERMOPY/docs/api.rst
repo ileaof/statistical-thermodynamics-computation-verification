@@ -41,6 +41,27 @@ Database
 .. automodule:: statthermopy.database.registry
    :members:
 
+Statistical transport properties
+-------------------------------
+
+Transport and thermophysical coefficients of a pure gas from the **Chapman–Enskog** first-order
+solution of the Boltzmann equation with the **Lennard–Jones** pair potential, plus the ideal-gas
+thermophysical coefficients and the derived dimensionless groups (Prandtl/Schmidt/Lewis). Fully
+first-principles: heat capacities and ``γ`` come from the partition-function engine, the only
+molecular inputs are ``σ`` and ``ε`` (:class:`~statthermopy.core.molecule.LennardJones`); no
+external property database (REFPROP/CoolProp) is used.
+
+.. automodule:: statthermopy.transport.transport
+   :members:
+.. automodule:: statthermopy.transport.collision
+   :members:
+.. automodule:: statthermopy.transport.lennard_jones
+   :members:
+.. automodule:: statthermopy.transport.plots
+   :members:
+.. automodule:: statthermopy.transport.export
+   :members:
+
 Utilities
 --------
 

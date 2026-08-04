@@ -12,3 +12,8 @@ electronic_levels:
   - {energy_cm1: 121.1, degeneracy: 2}
   - {energy_cm1: 189.8, degeneracy: 2}
 references: "Herzberg; NIST CCCDB. Ground X2Pi_1/2 (g=2); 2Pi_3/2 at 121.1 cm-1 (g=2); higher term near 189.8 cm-1 (g=2)."
+
+lennard_jones:
+  sigma_angstrom: 3.492
+  epsilon_over_k: 116.7
+  note: "Poling/PCO; associating fluid - LJ approximate"

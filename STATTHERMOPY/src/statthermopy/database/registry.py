@@ -21,6 +21,8 @@ YAML schema (optional fields in *italics*)::
       - {rotation_constant_cm1: 10.7, barrier_cm1: 1024.0, symmetry: 3, n_minima: 3, degeneracy: 1}
     electronic_levels:                    # list of {energy_cm1, degeneracy} (ground at 0)
       - {energy_cm1: 0.0, degeneracy: 1}
+    lennard_jones:                         # optional; molecular potential params (NOT property data).
+      {sigma_angstrom: 3.798, epsilon_over_k: 71.4}   # used by Chapman-Enskog transport module.
     references: "McQuarrie, Statistical Mechanics; NIST CCCDB"
 """
 
@@ -38,6 +40,7 @@ from ..core.molecule import (
     ElectronicLevel,
     Geometry,
     InternalRotor,
+    LennardJones,
     Molecule,
     VibrationalMode,
 )
@@ -54,7 +57,7 @@ def _rotational_temperatures_to_moments(theta: list[float]) -> tuple[float, ...]
 
 
 def _load_yaml(path: Path) -> dict:
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
 
@@ -89,6 +92,15 @@ def load_molecule(data: dict) -> Molecule:
         for l in (data.get("electronic_levels") or [])
     )
 
+    lj_data = data.get("lennard_jones")
+    lennard_jones = None
+    if lj_data:
+        lennard_jones = LennardJones(
+            sigma_angstrom=float(lj_data["sigma_angstrom"]),
+            epsilon_over_k=float(lj_data["epsilon_over_k"]),
+            note=str(lj_data.get("note", "")),
+        )
+
     return Molecule(
         name=str(data["name"]),
         formula=str(data.get("formula", data["name"])),
@@ -100,6 +112,7 @@ def load_molecule(data: dict) -> Molecule:
         vibrational_modes=vib_modes,
         internal_rotors=rotors,
         electronic_levels=elec_levels,
+        lennard_jones=lennard_jones,
     )
 
 
@@ -123,7 +136,7 @@ class MoleculeRegistry:
         """Return the available molecule names (sorted)."""
         return sorted(self._index().keys())
 
-    @functools.lru_cache(maxsize=None)
+    @functools.cache
     def _get_cached(self, name: str) -> Molecule:
         index = self._index()
         key = name.upper()

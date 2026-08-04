@@ -61,6 +61,30 @@ def _build_cuda_kernel():  # pragma: no cover - requires an NVIDIA GPU to execut
     def _props_at_T_cuda(geometry, symmetry, mass, theta_rot, use_quantum, cutoff,
                          theta_v, deg_v, theta_e, g_e, T, P, R, N_A, kB, h,
                          coeff_t, lnNA, nv, ne):
+        # T = 0 limit (see numba_backend._props_at_T for the rationale): quantum modes
+        # freeze (Cv -> 0), classical translation/rotation keep equipartition, U_m = 0 so
+        # the thermal field T_v -> 0 stays finite, classical S_m -> -inf.
+        if T == 0.0:
+            if geometry == 0:
+                cv0 = 1.5 * R
+                lnQr0 = 0.0
+            elif geometry == 1:
+                if use_quantum:
+                    cv0 = 1.5 * R
+                    lnQr0 = 0.0
+                else:
+                    cv0 = 2.5 * R
+                    lnQr0 = -float('inf')
+            else:
+                cv0 = 3.0 * R
+                lnQr0 = -float('inf')
+            qe0 = 0.0
+            for k in range(ne):
+                if theta_e[k] == 0.0:
+                    qe0 += g_e[k]
+            lnQe0 = math.log(qe0) if qe0 > 0.0 else 0.0
+            return (0.0, -float('inf'), 0.0, cv0, -float('inf'), lnQr0, 0.0, lnQe0)
+
         lnQt_i = 1.5 * math.log(coeff_t * T) + math.log(R * T / P)
         U_t = 1.5 * R * T
         Cv_t = 1.5 * R
@@ -105,16 +129,16 @@ def _build_cuda_kernel():  # pragma: no cover - requires an NVIDIA GPU to execut
         Cv_v = 0.0
         S_v = 0.0
         for k in range(nv):
+            # Stable exp(-x) form (avoids exp(x) overflow for T < theta/709).
             x = theta_v[k] / T
-            ex = math.exp(x)
-            e1 = math.expm1(x)
             g = deg_v[k]
             emx = math.exp(-x)
+            one = -math.expm1(-x)  # = 1 - exp(-x)
             l1p = math.log1p(-emx)
             lnQv_i += -g * l1p
-            U_v += g * R * theta_v[k] / e1
-            Cv_v += g * R * (x * x) * ex / (e1 * e1)
-            S_v += g * R * (x / e1 - l1p)
+            U_v += g * R * theta_v[k] * emx / one
+            Cv_v += g * R * (x * x) * emx / (one * one)
+            S_v += g * R * (x * emx / one - l1p)
         A_v = -R * T * lnQv_i
 
         qe = 0.0

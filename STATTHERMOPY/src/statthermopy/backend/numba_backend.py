@@ -136,6 +136,33 @@ def _make_kernels():
     def _props_at_T(geometry, symmetry, mass, theta_rot, use_quantum, cutoff,
                     theta_v, deg_v, theta_e, g_e, T, P, R, N_A, kB, h, coeff_t, lnNA, nv, ne):  # pragma: no cover (compiled by Numba)
         # Returns (U_m, S_m, A_m, Cv_m, lnQt, lnQr, lnQv, lnQe) for one temperature.
+        #
+        # T = 0 limit: the quantum modes (vibrational, electronic, and the quantum linear
+        # rotor when enabled) freeze (Cv -> 0, Third Law); the classical translational and
+        # classical-rotational modes keep their equipartition values (a known limitation:
+        # the classical ideal gas does not satisfy the Third Law). U_m = 0, so the thermal
+        # field T_v = U_m/Cv_m -> 0 stays finite. The classical S_m diverges to -inf.
+        if T == 0.0:
+            if geometry == 0:        # monoatomic: translation only
+                cv0 = 1.5 * R
+                lnQr0 = 0.0
+            elif geometry == 1:      # linear
+                if use_quantum:
+                    cv0 = 1.5 * R     # translation only; quantum rotor frozen
+                    lnQr0 = 0.0       # q = 1
+                else:
+                    cv0 = 2.5 * R     # translation 1.5R + classical rotor R
+                    lnQr0 = -math.inf
+            else:                     # nonlinear: translation 1.5R + classical rotor 1.5R
+                cv0 = 3.0 * R
+                lnQr0 = -math.inf
+            qe0 = 0.0
+            for k in range(ne):
+                if theta_e[k] == 0.0:
+                    qe0 += g_e[k]
+            lnQe0 = math.log(qe0) if qe0 > 0.0 else 0.0
+            return (0.0, -math.inf, 0.0, cv0, -math.inf, lnQr0, 0.0, lnQe0)
+
         lnQt_i = 1.5 * math.log(coeff_t * T) + math.log(R * T / P)
         U_t = 1.5 * R * T
         Cv_t = 1.5 * R
@@ -180,16 +207,17 @@ def _make_kernels():
         Cv_v = 0.0
         S_v = 0.0
         for k in range(nv):
+            # Stable exp(-x) form: exp(x) would overflow for T < theta/709 (~few K),
+            # producing NaN in Cv_v. emx = exp(-x) -> 0 as T -> 0 (Third Law: Cv_v -> 0).
             x = theta_v[k] / T
-            ex = math.exp(x)
-            e1 = math.expm1(x)
             g = deg_v[k]
             emx = math.exp(-x)
+            one = -math.expm1(-x)  # = 1 - exp(-x), accurate for small x
             l1p = math.log1p(-emx)
             lnQv_i += -g * l1p
-            U_v += g * R * theta_v[k] / e1
-            Cv_v += g * R * (x * x) * ex / (e1 * e1)
-            S_v += g * R * (x / e1 - l1p)
+            U_v += g * R * theta_v[k] * emx / one
+            Cv_v += g * R * (x * x) * emx / (one * one)
+            S_v += g * R * (x * emx / one - l1p)
         A_v = -R * T * lnQv_i
 
         qe = 0.0

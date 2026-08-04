@@ -51,7 +51,6 @@ numerical execution, never the physics or the data. No empirical correlation coe
 ## Files added in Phase 3
 
 **Backends:**
-
 - `src/statthermopy/backend/numba_backend.py` — `NumbaBackend`; `_extract_spec(mol)` (geometry /
   symmetry / mass / theta_rot / theta_v / deg_v / theta_e / g_e); `_make_kernels()` →
   `_q_rot_jit`, `_props_at_T` (shared per-T device function), `_molar_props_jit` (T-batched). All
@@ -154,7 +153,6 @@ species: **He, Ne, Kr, Xe, Cl2, NH3, SO2, H2S, N2O, C2H2, C2H4, C2H6, C3H8**. `l
 now returns 22 species (== every species in the molecular database).
 
 **Provenance:**
-
 - 11 species via the NIST WebBook gas-phase **Shomate** coefficients (Chase 1998), evaluated at the
   T grid `[298.15, 400, 600, 800, 1000, 1500, 2000]` (same grid as the Phase-2 core set). Identity
   verified by the listed S°(298.15) cross-check (all match to ~0.01 J/mol/K — no CO/NO-style
@@ -166,7 +164,6 @@ now returns 22 species (== every species in the molecular database).
   NASA Cp(298.15) cross-checks NIST's discrete Cp (C2H6 52.50 vs 52.49; C3H8 73.59 vs 73.60).
 
 **Constant refinement (per user decision "refine constants to pass"):**
-
 - **C3H8** initially failed the 5% gate (Cp MAE 7.06%, max 9.64%) because its database YAML used
   approximate grouped fundamentals. Replaced with the 27 experimental gas-phase fundamentals from
   the **Shimanouchi (1972)** compilation (via NIST WebBook vibrational levels, C2v — all
@@ -197,7 +194,6 @@ GUI still adds no physics — it wraps the same public API; only presentation ch
 
 **New module `gui/theme.py`** — a self-contained design system (PySide6-only, imported lazily
 by `mainwindow.py`, never by the core):
-
 - `Palette` dataclass of semantic tokens + `LIGHT` / `DARK` instances (bg/surface/surface_alt,
   border/border_strong, text/text_muted/text_disabled, accent(+hover/pressed/text/soft),
   success/danger (+soft), radius/radius_card).
@@ -215,7 +211,6 @@ by `mainwindow.py`, never by the core):
 
 **`gui/mainwindow.py`** (refactored, all pinned widget attributes/methods/tab-labels/
 table-shapes preserved — `tests/test_gui.py` unchanged):
-
 - `__init__` calls `_apply_theme(_detect_theme())` after build; stores `_theme_mode`,
   `_theme_palette`, `_theme_choice`, `_theme_actions`.
 - `_apply_theme(mode)` sets the app stylesheet + palette, regenerates/sets button icons,
@@ -310,7 +305,8 @@ return `None` → exact per-T Python fallback for C2H6/C3H8. Zero physics duplic
 matches numpy to 1e-10 (tested).
 
 **Database:** `C2H6.yaml` — dropped the 289 cm⁻¹ a_u torsion (17 oscillators) + 1 rotor
-(F=10.7, V3=1024 cm⁻¹, σ=3). `C3H8.yaml` — dropped the 216 & 268 cm⁻¹ torsions (25 oscillators) + 1 rotor entry degeneracy 2 (F=5.3, V3=1190 cm⁻¹, σ=3, two independent identical methyl tops;
+(F=10.7, V3=1024 cm⁻¹, σ=3). `C3H8.yaml` — dropped the 216 & 268 cm⁻¹ torsions (25 oscillators)
++ 1 rotor entry degeneracy 2 (F=5.3, V3=1190 cm⁻¹, σ=3, two independent identical methyl tops;
 top-top coupling neglected). Both still sum to 3N-6.
 
 **Validation impact (vs old harmonic MAE):** C3H8 Cp **2.28 % → 0.29 %** (near-exact 298–2000 K);
@@ -329,6 +325,28 @@ validation, numba fallback+match. Updated `test_database.py::test_vibrational_os
 
 **Verification:** `pytest --cov=statthermopy` → all pass, **96 %** (hindered_rotor 100 %).
 `import statthermopy` still keeps numba/GUI lazy. New files ruff-clean.
+
+## Thermal fields T_v, T_p (complete)
+
+Two new derived curves in the visualisation module: the constant-volume thermal field
+**T_v = U_m/Cv_m** and the constant-pressure thermal field **T_p = H_m/Cp_m** (both in K; for a
+monatomic gas both equal T exactly — a useful diagnostic). Added as first-class properties:
+
+- `ThermoProperties` and `MixtureProperties` gained `T_v`/`T_p` (computed in each `compute()`).
+- `property_vs_T` fast path: added to `_GRID_DERIVABLE` + derived in `_derive_property_array`
+  (from the grid's U_m/H_m/Cv_m/Cp_m — grid matches per-T path, tested).
+- `plots`: added to `MOLAR_PROPS` (⇒ `MIXTURE_PROPS`, GUI combo, `plot_all_properties`). New
+  `PROP_UNITS` map + `_ylabel()` put units on every axis; `plot_property`/`plot_mixture_property`
+  gained a `color` kwarg and now always draw a legend. New `plot_thermal_fields` /
+  `plot_mixture_thermal_fields` overlay both fields with distinct colour-blind-safe colours
+  (T_v `#0072B2`, T_p `#D55E00`), descriptive legends and a "Thermal field [K]" y-label.
+- GUI: T_v/T_p are individually selectable (via MOLAR_PROPS) and also as a combined
+  `_THERMAL_FIELDS_ITEM = "T_v & T_p (thermal fields)"` combo entry (added in `_build_plot_tab`
+  and `_sync_plot_props`, handled in `_on_plot`). Results table shows `T_v`/`T_p` rows (unit K,
+  no massic counterpart — like γ). Export is automatic (`asdict`).
+- Tests: `test_plot_all_properties` 13→**15**; new `test_thermal_fields_definitions_and_units`,
+  `test_plot_thermal_fields_two_distinct_curves`, `test_thermal_fields_property_vs_T_grid_matches`,
+  `test_mixture_thermal_fields`, `test_thermal_fields_available_in_gui`. Suite: **291 passed, 96%**.
 
 ## Plan file
 

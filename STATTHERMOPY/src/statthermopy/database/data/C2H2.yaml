@@ -14,3 +14,8 @@ vibrational_modes:
 electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Linear (D_inf_h), sigma=2; 7 modes = 1+1+1+2+2."
+
+lennard_jones:
+  sigma_angstrom: 4.033
+  epsilon_over_k: 231.8
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

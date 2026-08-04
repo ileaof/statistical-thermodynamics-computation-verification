@@ -49,6 +49,8 @@ class MixtureProperties:
     Cv_m: float
     Cp_m: float
     gamma: float
+    T_v: float       # constant-volume thermal field, U_m / Cv_m (K)
+    T_p: float       # constant-pressure thermal field, H_m / Cp_m (K)
     mu_m: float
     R_molar: float
     # massic
@@ -142,6 +144,9 @@ class IdealGasMixture:
 
         A_m = U_m - T * S_m
         gamma = Cp_m / Cv_m
+        # Thermal fields: characteristic temperatures U_m/Cv_m and H_m/Cp_m (K).
+        T_v = U_m / Cv_m
+        T_p = H_m / Cp_m
         mu_m = G_m
         M_avg = self.M_avg
 
@@ -149,7 +154,7 @@ class IdealGasMixture:
             T=T, P=P, basis=self.basis, x={mol.name: xi for mol, xi in x.items()},
             M_avg=M_avg,
             U_m=U_m, H_m=H_m, S_m=S_m, A_m=A_m, G_m=G_m,
-            Cv_m=Cv_m, Cp_m=Cp_m, gamma=gamma, mu_m=mu_m, R_molar=R,
+            Cv_m=Cv_m, Cp_m=Cp_m, gamma=gamma, T_v=T_v, T_p=T_p, mu_m=mu_m, R_molar=R,
             U_s=U_m / M_avg, H_s=H_m / M_avg, S_s=S_m / M_avg, A_s=A_m / M_avg,
             G_s=G_m / M_avg, Cv_s=Cv_m / M_avg, Cp_s=Cp_m / M_avg, R_specific=R / M_avg,
         )

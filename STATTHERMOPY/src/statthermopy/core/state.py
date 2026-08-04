@@ -71,8 +71,8 @@ class State:
     m: float | None = None
 
     def __post_init__(self) -> None:
-        if self.T is None or self.T <= 0:
-            raise ValueError("Temperature T must be > 0 K.")
+        if self.T is None or self.T < 0:
+            raise ValueError("Temperature T must be >= 0 K.")
         if self.P is not None and self.P <= 0:
             raise ValueError("Pressure P must be > 0 Pa.")
         if self.V is not None and self.V <= 0:

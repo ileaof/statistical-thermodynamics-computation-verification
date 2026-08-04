@@ -16,6 +16,16 @@ Classes
 Database
 ~~~~~~~~
 - :func:`get` (retrieve a molecule by name), :func:`list_molecules` (all available names).
+
+Statistical transport properties (first-principles, optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- :mod:`statthermopy.transport` — transport and thermophysical properties of pure gases derived
+  from Chapman–Enskog kinetic theory with the Lennard–Jones potential, atop this ideal-gas
+  engine: viscosity ``μ(T,P)``, kinematic viscosity ``ν``, thermal conductivity ``k``, thermal
+  diffusivity ``α``, binary diffusion ``D_ij``, Prandtl/Schmidt/Lewis numbers, compressibility
+  factor ``Z``, speed of sound, thermal-expansion coefficient ``β``, isothermal compressibility
+  ``κ_T`` and the Joule–Thomson coefficient. Uses molecular LJ parameters
+  (:class:`LennardJones`), not empirical property data.
 """
 
 from __future__ import annotations
@@ -26,6 +36,7 @@ from .core import (
     ElectronicLevel,
     Geometry,
     InternalRotor,
+    LennardJones,
     Molecule,
     ResolvedState,
     State,
@@ -44,6 +55,7 @@ from .database import get, list_molecules  # noqa: E402
 __all__ = [
     "R",
     "Contribution",
+    "LennardJones",
     "ElectronicLevel",
     "Geometry",
     "Molecule",
