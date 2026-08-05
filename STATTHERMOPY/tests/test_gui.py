@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 import sys
 
+import json
+
 import pytest
 
 # Skip the whole module if PySide6 isn't available.
@@ -58,13 +60,14 @@ def test_gui_main_is_callable():
 
 
 def test_window_constructs_with_tabs(win):
-    assert win._tabs.count() == 6
+    assert win._tabs.count() == 7
     assert win._tabs.tabText(0) == "Properties"
     assert win._tabs.tabText(1) == "Plot"
     assert win._tabs.tabText(2) == "Transport"
     assert win._tabs.tabText(3) == "Humid Air"
     assert win._tabs.tabText(4) == "Thermodynamic Comparisons"
-    assert win._tabs.tabText(5) == "Validate"
+    assert win._tabs.tabText(5) == "Air Transport"
+    assert win._tabs.tabText(6) == "Validate"
 
 
 def test_compute_pure_gas_populates_results(win):
@@ -466,6 +469,63 @@ def test_theme_helpers():
     assert isinstance(theme.default_font(), QFont)
     # detect_dark runs against the live (offscreen) app and returns a plain bool
     assert isinstance(theme.detect_dark(), bool)
+
+
+# -- Air Transport tab ----------------------------------------------------------
+
+
+def test_air_transport_compute_populates_tables(win):
+    """The Air Transport tab computes a humid point and fills the results + contribution tables."""
+    win.air_T.setValue(298.15)
+    win.air_P.setValue(101325.0)
+    win.air_mode.setCurrentIndex(0)  # Saturated
+    win._on_air_transport_compute()
+    assert win.air_table.rowCount() > 0
+    # the headline transport properties appear in the results table
+    labels = [win.air_table.item(r, 0).text() for r in range(win.air_table.rowCount())]
+    assert any("viscosity" in lab.lower() for lab in labels)
+    assert any("Prandtl" in lab for lab in labels)
+    # per-species contributions: 5 rows for saturated humid air (4 dry + H2O)
+    assert win.air_contrib_table.rowCount() == 5
+    species = [win.air_contrib_table.item(r, 0).text()
+               for r in range(win.air_contrib_table.rowCount())]
+    assert "H2O" in species
+    assert win._air_transport_last is not None
+    assert win._air_transport_last.mu > 0
+
+
+def test_air_transport_plot_renders(win):
+    """The dry-vs-humid comparison plot draws two curves and stores the table for export."""
+    win.air_plot_prop.setCurrentIndex(0)  # mu
+    win.air_which.setCurrentText("Dry vs Humid")
+    win.air_tmin.setValue(280.0)
+    win.air_tmax.setValue(360.0)
+    win.air_npts.setValue(20)
+    win.air_plot_p.setValue(101325.0)
+    win._on_air_transport_plot()
+    ax = win.air_canvas.figure.axes[0]
+    assert ax.has_data()
+    assert len(ax.lines) == 2  # dry + humid
+    assert win._air_transport_table is not None
+    assert "Dry air" in win._air_transport_table.columns
+
+
+def test_air_transport_export_writes_files(win, tmp_path, monkeypatch):
+    """The Air Transport export buttons write CSV / Excel / JSON / PDF from the point eval."""
+    win.air_T.setValue(298.15)
+    win.air_P.setValue(101325.0)
+    win.air_mode.setCurrentIndex(1)  # Relative humidity
+    win.air_value.setValue(0.5)
+    win._on_air_transport_compute()
+    monkeypatch.setattr(
+        "statthermopy.gui.mainwindow.QFileDialog.getSaveFileName",
+        lambda *a, **k: (str(tmp_path / "air.json"), ""),
+    )
+    win.air_json_btn.click()
+    out = tmp_path / "air.json"
+    assert out.exists() and out.stat().st_size > 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert "properties" in data and "components" in data
 
 
 # -- Transport tab --------------------------------------------------------------

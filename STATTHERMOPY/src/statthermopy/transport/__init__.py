@@ -25,7 +25,7 @@ public API.
 
 from __future__ import annotations
 
-from . import export, plots
+from . import air, export, plots
 from .collision import collision_integral, omega_11, omega_22, t_star
 from .lennard_jones import (
     combine_epsilon_over_k,
@@ -61,4 +61,5 @@ __all__ = [
     "reduced_mass",
     "plots",
     "export",
+    "air",
 ]

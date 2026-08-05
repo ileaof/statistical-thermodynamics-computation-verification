@@ -50,9 +50,9 @@ class HumidAir:
     ) -> None:
         self.dry_air = dry_air if dry_air is not None else air()
         self.saturation = saturation if saturation is not None else SaturationCalculator()
-        self.M_dry = self.dry_air.M_avg                       # kg/mol
-        self.M_water = get("H2O").molar_mass                  # kg/mol
-        self.epsilon = self.M_water / self.M_dry              # ~0.622
+        self.M_dry = self.dry_air.M_avg  # kg/mol
+        self.M_water = get("H2O").molar_mass  # kg/mol
+        self.epsilon = self.M_water / self.M_dry  # ~0.622
         self._dry_x = {mol.name: x for mol, x in self.dry_air.x.items()}
 
     # -- convenience ----------------------------------------------------------
@@ -87,8 +87,13 @@ class HumidAir:
         for name, c in contribs.items():
             pv = R * T if name == "translational" else 0.0
             out[name] = {
-                "ln_q": c.ln_q, "U_m": c.U_m, "H_m": c.U_m + pv,
-                "S_m": c.S_m, "A_m": c.A_m, "G_m": c.A_m + pv, "Cv_m": c.Cv_m,
+                "ln_q": c.ln_q,
+                "U_m": c.U_m,
+                "H_m": c.U_m + pv,
+                "S_m": c.S_m,
+                "A_m": c.A_m,
+                "G_m": c.A_m + pv,
+                "Cv_m": c.Cv_m,
             }
         return out
 
@@ -151,6 +156,7 @@ class HumidAir:
         mole_fraction: float | None = None,
         saturated: bool = False,
         wet_bulb: bool = True,
+        dew_point: bool = True,
     ) -> HumidAirState:
         """Evaluate the complete moist-air state at ``(T, P)``.
 
@@ -158,11 +164,18 @@ class HumidAir:
         ``humidity_ratio`` (kg/kg dry air) or ``mole_fraction``; with none given (or
         ``saturated=True``) the **saturation limit** is used — the maximum-water-holding state,
         which is the module's headline result. Set ``wet_bulb=False`` to skip the (iterative)
-        adiabatic-saturation temperature.
+        adiabatic-saturation temperature, and ``dew_point=False`` to skip the (iterative)
+        dew-point root-find — the composition and ``humidity_ratio`` do not depend on either, so
+        callers that only need the mixture composition (e.g. transport-property sweeps) can set
+        both to ``False`` for a large speed-up.
         """
         T = float(T)
         P = float(P)
-        given = [relative_humidity is not None, humidity_ratio is not None, mole_fraction is not None]
+        given = [
+            relative_humidity is not None,
+            humidity_ratio is not None,
+            mole_fraction is not None,
+        ]
         if sum(given) > 1:
             raise ValueError(
                 "Specify at most one of relative_humidity, humidity_ratio, mole_fraction."
@@ -182,7 +195,7 @@ class HumidAir:
             x_w = float(mole_fraction)
             is_sat = False
         else:  # humidity_ratio
-            r = float(humidity_ratio) / eps            # = P_v/(P - P_v)
+            r = float(humidity_ratio) / eps  # = P_v/(P - P_v)
             x_w = r / (1.0 + r)
             is_sat = False
         x_w = max(0.0, min(x_w, 1.0 - 1e-12))
@@ -198,11 +211,14 @@ class HumidAir:
         w_sat = w_of(P_sat)
         M_avg = pm.M_avg
         M_avg_sat = (1.0 - x_sat) * self.M_dry + x_sat * self.M_water
-        dew = self.saturation.dew_point(P_v) if P_v > 0.0 else float("nan")
+        dew = self.saturation.dew_point(P_v) if (P_v > 0.0 and dew_point) else float("nan")
         wb = self._wet_bulb(T, P, x_w) if wet_bulb else float("nan")
 
         return HumidAirState(
-            T=T, P=P, saturated=is_sat, liquid_model=self.saturation.liquid.name,
+            T=T,
+            P=P,
+            saturated=is_sat,
+            liquid_model=self.saturation.liquid.name,
             # saturation limit
             P_sat=P_sat,
             x_h2o_max=x_sat,
@@ -226,11 +242,24 @@ class HumidAir:
             M_avg=M_avg,
             R_specific=R / M_avg,
             # molar thermodynamics (moist-air mixture)
-            U_m=pm.U_m, H_m=pm.H_m, S_m=pm.S_m, A_m=pm.A_m, G_m=pm.G_m,
-            Cv_m=pm.Cv_m, Cp_m=pm.Cp_m, gamma=pm.gamma, mu_m=pm.mu_m, S_mixing=pm.S_mixing,
+            U_m=pm.U_m,
+            H_m=pm.H_m,
+            S_m=pm.S_m,
+            A_m=pm.A_m,
+            G_m=pm.G_m,
+            Cv_m=pm.Cv_m,
+            Cp_m=pm.Cp_m,
+            gamma=pm.gamma,
+            mu_m=pm.mu_m,
+            S_mixing=pm.S_mixing,
             # massic thermodynamics
-            U_s=pm.U_s, H_s=pm.H_s, S_s=pm.S_s, A_s=pm.A_s, G_s=pm.G_s,
-            Cv_s=pm.Cv_s, Cp_s=pm.Cp_s,
+            U_s=pm.U_s,
+            H_s=pm.H_s,
+            S_s=pm.S_s,
+            A_s=pm.A_s,
+            G_s=pm.G_s,
+            Cv_s=pm.Cv_s,
+            Cp_s=pm.Cp_s,
             # breakdowns
             components=dict(pm.components),
             vapor_mode_contributions=self._vapor_mode_contributions(T, P_v if P_v > 0 else P_sat),

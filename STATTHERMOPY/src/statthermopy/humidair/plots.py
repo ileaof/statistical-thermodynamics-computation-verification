@@ -104,12 +104,11 @@ def plot_max_solubility_vs_P(P_range: Iterable[float], T: float = 298.15, *, mod
 
 
 def plot_humidity_ratio_vs_T(T_range: Iterable[float], P: float = 101325.0, *, model=None, ax=None):
-    """Saturation humidity ratio ``w_s(T)`` (g vapour / kg dry air) versus temperature.
+    """Saturation humidity ratio ``w_s(T)`` (kg vapour / kg dry air) versus temperature.
 
-    Computed directly from the mass ratio ``w_s = ε P_sat/(P − P_sat)`` (kg/kg) and reported in
-    the conventional **g/kg dry air** (i.e. ×1000), so a typical value reads ~30 rather than 0.030;
-    above the boiling point (``P_sat ≥ P``) no saturated humid air exists, so those points are
-    blank.
+    Computed directly from ``w_s = ε P_sat/(P − P_sat)`` and reported as a dimensionless mass ratio
+    (**g/kg dry air**); above the boiling point (``P_sat ≥ P``) no saturated humid air exists, so
+    those points are blank.
     """
     m = _model(model)
     eps = m.epsilon
@@ -117,7 +116,7 @@ def plot_humidity_ratio_vs_T(T_range: Iterable[float], P: float = 101325.0, *, m
     w = []
     for t in Ts:
         ps = m.saturation_pressure(t)
-        w.append(eps * ps / (P - ps) * 1e3 if ps < P else float("nan"))
+        w.append(eps * ps / (P - ps) if ps < P else float("nan"))
     ax = _new_ax(ax)
     ax.plot(Ts, w, color="#CC79A7", label=f"w_sat @ {P/1e3:.1f} kPa")
     ax.set_xlabel("Temperature (K)")

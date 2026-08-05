@@ -171,8 +171,8 @@ def test_humidair_plots_return_axes():
 
 def test_humidity_ratio_plot_matches_definition_and_handles_boiling():
     """The humidity-ratio curve is computed directly from P_sat (fast path), equals
-    1000·ε·P_sat/(P−P_sat) in g/kg dry air (the conventional presentation), and leaves the
-    above-boiling region (P_sat ≥ P) blank."""
+    ε·P_sat/(P−P_sat) as a dimensionless kg/kg dry air mass ratio, and leaves the above-boiling
+    region (P_sat ≥ P) blank."""
     import numpy as np
 
     from statthermopy.humidair import HumidAir
@@ -182,13 +182,13 @@ def test_humidity_ratio_plot_matches_definition_and_handles_boiling():
     # range that crosses the boiling point at 1 atm
     Ts = np.linspace(283.15, 380.0, 15)
     ax = hp.plot_humidity_ratio_vs_T(Ts, P=P, model=ha)
-    assert "g/kg" in ax.get_ylabel()
+    assert "humidity ratio" in ax.get_ylabel().lower()
     ys = ax.lines[0].get_ydata()
     for t, y in zip(Ts, ys, strict=False):
         ps = ha.saturation_pressure(float(t))
         if ps < P:
-            # reported in g/kg dry air: the mass ratio w_s = ε·P_sat/(P−P_sat) times 1000
-            assert y == pytest.approx(ha.epsilon * ps / (P - ps) * 1e3, rel=1e-9)
+            # reported as the dimensionless mass ratio w_s = ε·P_sat/(P−P_sat) (kg/kg dry air)
+            assert y == pytest.approx(ha.epsilon * ps / (P - ps), rel=1e-9)
         else:  # above boiling: no saturated humid air -> blank
             assert np.isnan(y)
 

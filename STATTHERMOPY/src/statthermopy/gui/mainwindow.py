@@ -162,6 +162,7 @@ class StatThermoPyWindow(QMainWindow):
         tabs.addTab(self._build_transport_tab(), "Transport")
         tabs.addTab(self._build_humidair_tab(), "Humid Air")
         tabs.addTab(self._build_comparisons_tab(), "Thermodynamic Comparisons")
+        tabs.addTab(self._build_air_transport_tab(), "Air Transport")
         tabs.addTab(self._build_validate_tab(), "Validate")
         self.setCentralWidget(tabs)
         self._tabs = tabs
@@ -960,6 +961,316 @@ class StatThermoPyWindow(QMainWindow):
         except Exception as exc:  # pragma: no cover - GUI error path
             QMessageBox.critical(self, "Comparisons", f"Export failed:\n{exc}")
 
+    # ================= Air Transport tab =======================================
+    def _build_air_transport_tab(self) -> QWidget:
+        """Dedicated Air Transport Properties Database tab.
+
+        Left: state inputs (T, P, humidity mode) and a results table of all mixture transport /
+        thermophysical properties, plus a per-species contribution table (Wilke / Mason-Saxena /
+        Blanc breakdown). Right: a property combo (the eight headline properties), T range, N, a
+        dry-vs-humid mode, Plot, and CSV / Excel / JSON / PDF / PNG export, over a ``_PlotCanvas``.
+        No physics here — it wraps :class:`~statthermopy.transport.air.AirTransport` /
+        :class:`~statthermopy.transport.air.AirTransportAnalysis` and the air-transport plots.
+        """
+        from ..transport.air import AIR_TRANSPORT_LABELS, AIR_TRANSPORT_PROPS, AIR_TRANSPORT_UNITS
+
+        tab = QWidget()
+        root = QHBoxLayout(tab)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
+
+        splitter = QSplitter(Qt.Horizontal)
+
+        # --- left: point evaluation + results + per-species contributions -----
+        left = QWidget()
+        llay = QVBoxLayout(left)
+        llay.setContentsMargins(0, 0, 0, 0)
+        llay.setSpacing(10)
+
+        card = QFrame()
+        card.setObjectName("Card")
+        form = QVBoxLayout(card)
+        form.setContentsMargins(10, 8, 10, 8)
+        form.setSpacing(8)
+        row1 = QHBoxLayout()
+        self.air_T = self._make_spin(200.0, 2000.0, 298.15)
+        self.air_P = self._make_spin(1.0, 1.0e8, 101325.0)
+        row1.addWidget(QLabel("T (K):"))
+        row1.addWidget(self.air_T)
+        row1.addWidget(QLabel("P (Pa):"))
+        row1.addWidget(self.air_P)
+        row1.addStretch()
+        form.addLayout(row1)
+        row2 = QHBoxLayout()
+        self.air_mode = QComboBox()
+        self.air_mode.addItems(
+            ["Saturated (max)", "Relative humidity", "Humidity ratio [kg/kg]", "Mole fraction"]
+        )
+        self.air_mode.currentIndexChanged.connect(self._on_air_mode_changed)
+        self.air_value = self._make_spin(0.0, 10.0, 0.5)
+        self.air_btn = QPushButton("Compute")
+        self.air_btn.setProperty("primary", True)
+        self.air_btn.clicked.connect(self._on_air_transport_compute)
+        row2.addWidget(QLabel("Humidity:"))
+        row2.addWidget(self.air_mode)
+        row2.addWidget(QLabel("value:"))
+        row2.addWidget(self.air_value)
+        row2.addWidget(self.air_btn)
+        row2.addStretch()
+        form.addLayout(row2)
+        llay.addWidget(card)
+
+        self.air_table = QTableWidget(0, 3, self)
+        self.air_table.setAlternatingRowColors(True)
+        self.air_table.setHorizontalHeaderLabels(["Property", "Value", "Unit"])
+        self.air_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.air_table.verticalHeader().setVisible(False)
+        llay.addWidget(self.air_table, 1)
+
+        self.air_contrib_box = QGroupBox("Per-species contributions")
+        clay = QVBoxLayout(self.air_contrib_box)
+        clay.setContentsMargins(8, 8, 8, 8)
+        self.air_contrib_table = QTableWidget(0, 7, self)
+        self.air_contrib_table.setAlternatingRowColors(True)
+        self.air_contrib_table.setHorizontalHeaderLabels(
+            ["Species", "x", "mu_i [Pa·s]", "k_i [W/m/K]", "D_im [m^2/s]",
+             "mu_contrib", "k_contrib"]
+        )
+        self.air_contrib_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.air_contrib_table.verticalHeader().setVisible(False)
+        clay.addWidget(self.air_contrib_table)
+        llay.addWidget(self.air_contrib_box, 1)
+
+        # --- right: plot controls + canvas + export ---------------------------
+        right = QWidget()
+        rlay = QVBoxLayout(right)
+        rlay.setContentsMargins(0, 0, 0, 0)
+        rlay.setSpacing(10)
+
+        card2 = QFrame()
+        card2.setObjectName("Card")
+        c2 = QVBoxLayout(card2)
+        c2.setContentsMargins(10, 8, 10, 8)
+        c2.setSpacing(8)
+        prow = QHBoxLayout()
+        self.air_plot_prop = QComboBox()
+        for p in AIR_TRANSPORT_PROPS:
+            unit = AIR_TRANSPORT_UNITS.get(p, "")
+            label = AIR_TRANSPORT_LABELS.get(p, p)
+            self.air_plot_prop.addItem(f"{p} — {label} [{unit}]", userData=p)
+        prow.addWidget(QLabel("Property:"))
+        prow.addWidget(self.air_plot_prop, 1)
+        self.air_which = QComboBox()
+        self.air_which.addItems(["Dry vs Humid", "Dry air", "Humid air"])
+        prow.addWidget(QLabel("Mode:"))
+        prow.addWidget(self.air_which)
+        c2.addLayout(prow)
+
+        prow2 = QHBoxLayout()
+        self.air_tmin = self._make_spin(200.0, 2000.0, 250.0)
+        self.air_tmax = self._make_spin(200.0, 2000.0, 400.0)
+        self.air_npts = QSpinBox()
+        self.air_npts.setRange(10, 2000)
+        self.air_npts.setValue(100)
+        self.air_plot_p = self._make_spin(1.0, 1.0e8, 101325.0)
+        prow2.addWidget(QLabel("Tmin:"))
+        prow2.addWidget(self.air_tmin)
+        prow2.addWidget(QLabel("Tmax:"))
+        prow2.addWidget(self.air_tmax)
+        prow2.addWidget(QLabel("N:"))
+        prow2.addWidget(self.air_npts)
+        prow2.addWidget(QLabel("P (Pa):"))
+        prow2.addWidget(self.air_plot_p)
+        prow2.addStretch()
+        self.air_plot_btn = QPushButton("Plot")
+        self.air_plot_btn.setProperty("primary", True)
+        self.air_plot_btn.clicked.connect(self._on_air_transport_plot)
+        prow2.addWidget(self.air_plot_btn)
+        c2.addLayout(prow2)
+        rlay.addWidget(card2)
+
+        exp_row = QHBoxLayout()
+        exp_row.setSpacing(6)
+        self.air_csv_btn = QPushButton("Export CSV")
+        self.air_xlsx_btn = QPushButton("Export Excel")
+        self.air_json_btn = QPushButton("Export JSON")
+        self.air_pdf_btn = QPushButton("Export PDF")
+        self.air_png_btn = QPushButton("Export PNG")
+        for b in (self.air_csv_btn, self.air_xlsx_btn, self.air_json_btn,
+                  self.air_pdf_btn, self.air_png_btn):
+            b.clicked.connect(self._on_air_transport_export)
+        exp_row.addWidget(self.air_csv_btn)
+        exp_row.addWidget(self.air_xlsx_btn)
+        exp_row.addWidget(self.air_json_btn)
+        exp_row.addWidget(self.air_pdf_btn)
+        exp_row.addWidget(self.air_png_btn)
+        exp_row.addStretch()
+        rlay.addLayout(exp_row)
+
+        self.air_status = QLabel(
+            "Dry-air (N2/O2/Ar/CO2) and humid-air transport from Wilke / Mason-Saxena / Blanc "
+            "mixing rules on Chapman-Enskog + Lennard-Jones. Compute a point, or plot a "
+            "dry-vs-humid comparison over T. Click a legend entry to toggle a curve; hover for values."
+        )
+        self.air_status.setWordWrap(True)
+        rlay.addWidget(self.air_status)
+
+        self.air_canvas = _PlotCanvas()
+        rlay.addWidget(self.air_canvas, 1)
+
+        splitter.addWidget(left)
+        splitter.addWidget(right)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([460, 640])
+        root.addWidget(splitter)
+
+        self._air_model = None                  # lazy AirTransport
+        self._air_transport_last = None         # last MixtureTransportProperties (point, for export)
+        self._air_transport_table = None        # last AirTransportTable (plot, for data export)
+        self._on_air_mode_changed()
+        return tab
+
+    # -- Air Transport tab -----------------------------------------------------
+    def _air_model_obj(self):
+        from ..transport.air import AirTransport
+
+        if self._air_model is None:
+            self._air_model = AirTransport()
+        return self._air_model
+
+    def _on_air_mode_changed(self) -> None:
+        # the value spinbox is only meaningful for the sub-saturated modes
+        self.air_value.setEnabled(self.air_mode.currentIndex() != 0)
+
+    def _air_humidity_kwargs(self) -> dict:
+        mode = self.air_mode.currentIndex()
+        val = float(self.air_value.value())
+        if mode == 1:
+            return {"relative_humidity": val}
+        if mode == 2:
+            return {"humidity_ratio": val}
+        if mode == 3:
+            return {"mole_fraction": val}
+        return {}  # saturated
+
+    def _on_air_transport_compute(self) -> None:
+        """Evaluate all air-transport + thermophysical properties at (T, P) for the humidity spec."""
+        from ..transport.air import AIR_TRANSPORT_LABELS, AIR_TRANSPORT_UNITS
+
+        T = float(self.air_T.value())
+        P = float(self.air_P.value())
+        kw = self._air_humidity_kwargs()
+        try:
+            res = self._air_model_obj().humid(T, P, **kw)
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Air Transport", f"Computation failed:\n{exc}")
+            return
+        self._air_transport_last = res
+
+        props = ["mu", "nu", "k", "alpha", "D_eff", "Pr", "Sc", "Le",
+                 "rho", "R_specific", "a", "beta", "kappa_T", "gamma", "Z",
+                 "cv_s", "cp_s", "M_avg"]
+        rows = []
+        for p in props:
+            val = getattr(res, p, None)
+            if p == "M_avg":
+                val = getattr(res, "M_avg", None)
+                if val is not None:
+                    val *= 1e3  # g/mol
+                unit = "g/mol"
+                label = "M_avg"
+            else:
+                unit = AIR_TRANSPORT_UNITS.get(p, "")
+                label = AIR_TRANSPORT_LABELS.get(p, p)
+            rows.append((label, val, unit))
+        self.air_table.setRowCount(len(rows))
+        for i, (label, val, unit) in enumerate(rows):
+            self.air_table.setItem(i, 0, QTableWidgetItem(label))
+            self.air_table.setItem(i, 1, QTableWidgetItem(_fmt(val) if val is not None else ""))
+            self.air_table.setItem(i, 2, QTableWidgetItem(unit))
+
+        comps = list(res.components.values())
+        self.air_contrib_table.setRowCount(len(comps))
+        for i, c in enumerate(comps):
+            self.air_contrib_table.setItem(i, 0, QTableWidgetItem(c.name))
+            self.air_contrib_table.setItem(i, 1, QTableWidgetItem(_fmt(c.x)))
+            self.air_contrib_table.setItem(i, 2, QTableWidgetItem(f"{c.mu_i:.4e}"))
+            self.air_contrib_table.setItem(i, 3, QTableWidgetItem(f"{c.k_i:.4e}"))
+            self.air_contrib_table.setItem(i, 4, QTableWidgetItem(f"{c.D_im:.4e}"))
+            self.air_contrib_table.setItem(i, 5, QTableWidgetItem(f"{c.mu_contrib:.4e}"))
+            self.air_contrib_table.setItem(i, 6, QTableWidgetItem(f"{c.k_contrib:.4e}"))
+
+        tag = res.label or ("humid air" if (res.humidity_ratio or 0) > 0 else "dry air")
+        self.air_status.setText(
+            f"{tag} @ T={T:.2f} K, P={P:.4g} Pa — mu={res.mu:.4g} Pa·s, k={res.k:.4g} W/m·K, "
+            f"Pr={res.Pr:.3f}, Sc={res.Sc:.3f}, Le={res.Le:.3f}, a={res.a:.2f} m/s."
+        )
+
+    def _on_air_transport_plot(self) -> None:
+        """Render the selected air-transport property vs T (dry / humid / comparison)."""
+        import numpy as np
+
+        from ..transport.air import plots as ap
+
+        prop = self.air_plot_prop.currentData()
+        tmin = float(self.air_tmin.value())
+        tmax = float(self.air_tmax.value())
+        n = int(self.air_npts.value())
+        P = float(self.air_plot_p.value())
+        if tmax <= tmin:
+            QMessageBox.warning(self, "Air Transport", "Tmax must exceed Tmin.")
+            return
+        which = {0: "comparison", 1: "dry", 2: "humid"}[self.air_which.currentIndex()]
+        kw = self._air_humidity_kwargs()
+        if not kw:
+            # comparison / humid default to 50 % RH when no humidity is specified
+            kw["relative_humidity"] = 0.5
+        Ts = np.linspace(tmin, tmax, n)
+        ax = self.air_canvas.ax
+        ax.clear()
+        try:
+            table, _ = ap.plot_air_transport(
+                self._air_model_obj(), prop, Ts, P=P, which=which,
+                ax=ax, interactive=True, **kw,
+            )
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Air Transport", f"Plot failed:\n{exc}")
+            return
+        self._air_transport_table = table
+        self.air_canvas.refresh()
+        self.air_status.setText(
+            f"{which}: {prop} vs T ({tmin:.0f}–{tmax:.0f} K, P={P:.4g} Pa, {n} pts).")
+
+    def _on_air_transport_export(self) -> None:
+        """Export the air-transport point eval (csv/xlsx/json/pdf) or the plot canvas (png)."""
+        from ..transport.air import AirTransportExporter
+
+        label = self.sender().text()
+        ext = {"Export CSV": "csv", "Export Excel": "xlsx", "Export JSON": "json",
+               "Export PDF": "pdf", "Export PNG": "png"}[label]
+        path, _ = QFileDialog.getSaveFileName(
+            self, f"Export {ext.upper()}", f"air_transport.{ext}"
+        )
+        if not path:  # pragma: no cover - user cancelled
+            return
+        try:
+            if ext == "png":
+                self.air_canvas.figure.savefig(path, dpi=120, bbox_inches="tight")
+            else:
+                if self._air_transport_last is None:
+                    QMessageBox.warning(
+                        self, "Air Transport", "Compute a point evaluation first (Compute button).")
+                    return
+                meth = {"csv": "to_csv", "xlsx": "to_excel",
+                        "json": "to_json", "pdf": "to_pdf"}[ext]
+                getattr(
+                    AirTransportExporter(self._air_transport_last, self._air_transport_table),
+                    meth,
+                )(path)
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Air Transport", f"Export failed:\n{exc}")
+
     def _build_validate_tab(self) -> QWidget:
         tab = QWidget()
         lay = QVBoxLayout(tab)
@@ -1046,6 +1357,12 @@ class StatThermoPyWindow(QMainWindow):
         if hasattr(self, "transport_btn"):
             self.transport_btn.setIcon(icons["check"])
             self.transport_plot_btn.setIcon(icons["play"])
+        if hasattr(self, "humid_btn"):
+            self.humid_btn.setIcon(icons["check"])
+            self.humid_plot_btn.setIcon(icons["play"])
+        if hasattr(self, "air_btn"):
+            self.air_btn.setIcon(icons["check"])
+            self.air_plot_btn.setIcon(icons["play"])
 
     def _apply_theme(self, mode: str) -> None:
         from . import theme
@@ -1074,6 +1391,10 @@ class StatThermoPyWindow(QMainWindow):
         if hasattr(self, "cmp_plot_btn"):
             self.cmp_plot_btn.style().unpolish(self.cmp_plot_btn)
             self.cmp_plot_btn.style().polish(self.cmp_plot_btn)
+        if hasattr(self, "air_btn"):
+            for btn in (self.air_btn, self.air_plot_btn):
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
         self.plot_canvas.apply_theme(palette)
         self.val_canvas.apply_theme(palette)
         if hasattr(self, "transport_canvas"):
@@ -1082,6 +1403,8 @@ class StatThermoPyWindow(QMainWindow):
             self.humid_canvas.apply_theme(palette)
         if hasattr(self, "cmp_canvas"):
             self.cmp_canvas.apply_theme(palette)
+        if hasattr(self, "air_canvas"):
+            self.air_canvas.apply_theme(palette)
 
     def _on_theme_chosen(self, choice: str) -> None:
         self._theme_choice = choice

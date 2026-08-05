@@ -94,6 +94,51 @@ class ComparisonTable:
         self.to_dataframe().to_excel(path, index=False, sheet_name="humid_air")
         return str(path)
 
+    def to_json(self, path) -> str:
+        """Write the table (header + columns + meta) to a JSON file and return the path."""
+        import json
+
+        data = {
+            "title": self.title,
+            "x_label": self.x_label,
+            "y_label": self.y_label,
+            "x_unit": self.x_unit,
+            "meta": self.meta,
+            "columns": self.columns,
+        }
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, default=float)
+        return str(path)
+
+    def to_pdf(self, path) -> str:
+        """Render the table to a PDF (matplotlib table figure) and return the path.
+
+        No external PDF engine is required — matplotlib's built-in PDF backend is used.
+        """
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        header = [self.x_label, *self.columns.keys()]
+        keys = list(self.columns.keys())
+        n = len(self.x)
+        cell_text = [
+            [f"{self.x[i]:.4g}", *[f"{self.columns[k][i]:.6g}" for k in keys]]
+            for i in range(n)
+        ]
+        fig, ax = plt.subplots(figsize=(8, 0.4 * n + 1.2))
+        ax.axis("off")
+        ax.set_title(self.title, fontsize=10)
+        tbl = ax.table(cellText=cell_text, colLabels=header, loc="center", cellLoc="center")
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(8)
+        tbl.scale(1, 1.1)
+        fig.tight_layout()
+        fig.savefig(path, bbox_inches="tight")
+        plt.close(fig)
+        return str(path)
+
 
 def _to_unit(T_K: float, unit: str) -> float:
     return T_K - 273.15 if unit.upper().startswith("C") else T_K
