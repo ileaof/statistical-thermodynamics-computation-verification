@@ -58,11 +58,13 @@ def test_gui_main_is_callable():
 
 
 def test_window_constructs_with_tabs(win):
-    assert win._tabs.count() == 4
+    assert win._tabs.count() == 6
     assert win._tabs.tabText(0) == "Properties"
     assert win._tabs.tabText(1) == "Plot"
     assert win._tabs.tabText(2) == "Transport"
-    assert win._tabs.tabText(3) == "Validate"
+    assert win._tabs.tabText(3) == "Humid Air"
+    assert win._tabs.tabText(4) == "Thermodynamic Comparisons"
+    assert win._tabs.tabText(5) == "Validate"
 
 
 def test_compute_pure_gas_populates_results(win):
@@ -279,6 +281,72 @@ def test_plot_tab_uses_mixture_in_mixture_mode(win):
     win._on_mode_changed()
     props = [win.plot_prop.itemText(i) for i in range(win.plot_prop.count())]
     assert "Qtotal" in props
+
+
+def test_humidair_tab_computes_and_plots(win):
+    """The Humid Air tab computes the saturation limit + psychrometrics and plots a curve."""
+    win.humid_T.setValue(298.15)
+    win.humid_P.setValue(101325.0)
+    win.humid_mode.setCurrentIndex(0)  # Saturated (max solubility)
+    win._on_humidair_compute()
+    labels = [win.humid_table.item(r, 0).text() for r in range(win.humid_table.rowCount())]
+    assert any("P_sat" in x for x in labels)
+    assert any("humidity ratio max" in x for x in labels)
+    assert any("wet-bulb" in x for x in labels)
+    # vapour partition-function breakdown populated (4 factors)
+    factors = [win.humid_modes_table.item(r, 0).text()
+               for r in range(win.humid_modes_table.rowCount())]
+    assert {"translational", "rotational", "vibrational", "electronic"}.issubset(set(factors))
+
+    # sub-saturated mode enables the value field
+    win.humid_mode.setCurrentIndex(1)  # Relative humidity
+    win._on_humid_mode_changed()
+    assert win.humid_value.isEnabled()
+    win.humid_value.setValue(0.5)
+    win._on_humidair_compute()
+
+    # plot a saturation-pressure curve
+    win.humid_plot_prop.setCurrentIndex(0)
+    win.humid_tmin.setValue(280.0)
+    win.humid_tmax.setValue(360.0)
+    win.humid_npts.setValue(20)
+    win._on_humidair_plot()
+    assert win.humid_canvas.figure.axes[0].has_data()
+
+
+def test_thermodynamic_comparisons_tab(win, tmp_path):
+    """The dedicated 'Thermodynamic Comparisons' tab plots the water-vapour content and the
+    4-curve dry/humid property comparison, and exports the data."""
+    win.cmp_P.setValue(101325.0)
+    win.cmp_mode.setCurrentIndex(1)  # relative humidity
+    win.cmp_value.setValue(0.5)
+    win.cmp_tmin.setValue(273.16)
+    win.cmp_tmax.setValue(330.0)
+    win.cmp_npts.setValue(20)
+
+    # water-vapour content (actual + saturation)
+    win.cmp_analysis.setCurrentIndex(0)
+    win._on_comparison_analysis_changed()
+    assert not win.cmp_prop.isEnabled()  # property controls disabled for this analysis
+    win._on_comparison_plot()
+    assert win.cmp_canvas.figure.axes[0].has_data()
+    assert "actual w [g/kg]" in win._cmp_table.columns
+
+    # dry vs humid: entropy comparison -> 4 curves
+    win.cmp_analysis.setCurrentIndex(1)
+    win._on_comparison_analysis_changed()
+    assert win.cmp_prop.isEnabled()
+    win.cmp_prop.setCurrentText("Entropy S")
+    win.cmp_isobaric.setChecked(True)
+    win.cmp_isochoric.setChecked(True)
+    win._on_comparison_plot()
+    assert len(win.cmp_canvas.figure.axes[0].get_lines()) == 4
+    assert len(win._cmp_table.columns) == 4
+
+    # export the numerical data to CSV
+    out = tmp_path / "cmp.csv"
+    win._cmp_table.to_csv(out)
+    assert out.exists() and out.stat().st_size > 0
 
 
 def test_validate_tab_runs_and_passes(win):

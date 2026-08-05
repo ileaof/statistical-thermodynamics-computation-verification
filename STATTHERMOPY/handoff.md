@@ -388,6 +388,121 @@ extensibility, contributions-sum-to-totals, S_mixing, as_dict/JSON). `test_auxil
 `test_cli_fluid_air`, `test_cli_run_fluid_air`. `test_gui.py`:
 `test_air_preset_loads_and_shows_components`. All green; my new files ruff-clean.
 
+## Statistical Humid Air (complete)
+
+New **`statthermopy/humidair/`** subpackage: maximum water-vapour solubility of air vs T and/or P
+from vapour–liquid equilibrium `μ_v = μ_l`, with the **vapour phase pure statistical mechanics**
+and a **pluggable liquid reference**. No empirical vapour-pressure correlation (Antoine/Magnus/
+Tetens). **Planetary atmospheres from the earlier Air task remain out of scope** (user cut).
+
+**Physics / reference reconciliation (the crux).** The vapour Gibbs `g_v(T,P)` comes from
+`Thermodynamics(get("H2O"))` (its absolute Sackur–Tetrode+rot+vib+elec entropy = 188.7 vs 188.8
+J/mol/K lit). The liquid uses its own reference scale; it is reconciled to the vapour scale with
+**two physical anchors at the triple point** (273.16 K, 611.657 Pa): coexistence there, and
+`Δh_vap(T_t)=45.054 kJ/mol` — fixing the liquid enthalpy/entropy offsets (Δh₀, Δs₀). Then solve
+`g_v(T,P)=g_l(T,P)` for P (explicit `P_sat=P_ref·exp[(g_l−g_v)/RT]` + Poynting fixed-point).
+**Validated:** P_sat err −0.09 % (20 °C), −0.15 % (25 °C), −1.5 % (100 °C); Δh_vap(298)=44.0 vs
+43.99 kJ/mol; w_sat(25 °C)=20.06 g/kg; wet-bulb(25 °C/50 %RH)=17.9 °C — all match psychrometric
+tables.
+
+**Files.** `liquid.py`: `LiquidWaterModel` ABC + `ConstantCpLiquid` (transparent, dependency-free,
+default fallback) + `IAPWSLiquid` (IAPWS-95 via optional `iapws`, **auto-selected when importable**
+— `default_liquid_model()`; `_sat_liquid` clamps T to [T_triple, T_crit) so edge probes never
+raise). `saturation.py`: `SaturationCalculator` (anchor, `saturation_pressure`, `saturation_
+temperature`/`dew_point` bounded to liquid-vapour range, `enthalpy_of_vaporisation`). `state.py`:
+`HumidAirState` (all ~24 outputs + `components` + `vapor_mode_contributions`, `as_dict`).
+`humidair.py`: `HumidAir` — builds the moist mixture (dry air scaled + H2O via `IdealGasMixture`),
+psychrometrics, **adiabatic-saturation wet-bulb** (energy balance root-find), per-partition-factor
+vapour breakdown (PV=RT assigned to translational so per-mode G sums to total). `plots.py`: P_sat/
+solubility/w/RH/dew curves + **3-D solubility(T,P) surface** (mpl_toolkits). Dry background is a
+swappable `IdealGasMixture` (extensible to trace gases / other mixtures / future real gas).
+
+**Integration.** Top-level exports `HumidAir`, `HumidAirState`, `SaturationCalculator` (import stays
+lazy — numba/gui/**iapws** all deferred; iapws only on first `SaturationCalculator()`). CLI: REPL
+`humidair [rh=…|w=…|x=…]` + `humidair <psat|solubility|w|rh> Tmin Tmax` plotting; one-shot
+`humidair --T --P [--rh]`. `pyproject` extra `humidair=["iapws>=1.5"]` (+ dev).
+
+**Critical analysis** in **`docs/HUMID_AIR.md`**: why direct stat-mech fails for the liquid
+(non-factorising Z_N, H-bond many-body coupling), and a comparison table of SAFT / perturbation
+theory / integral equations (OZ+PY/HNC/RISM) / lattice / simulation / IAPWS with
+advantages·limits·validity, plus the upgrade path (drop a SAFT `LiquidWaterModel` behind the same
+`g_v=g_l` framework).
+
+**Tests:** `tests/test_humidair.py` (19: P_sat vs reference for both liquids, triple-point anchor,
+dew-point inversion, Δh_vap, absolute vapour entropy, saturated headline numbers, humidity
+definitions/round-trips, degree-of-saturation, wet-bulb bracketing, vapour modes sum to G,
+mixture bulk, custom dry background, as_dict/JSON, plots incl. 3-D). `test_auxiliary.py`:
+`test_cli_humidair`, `test_cli_run_humidair`.
+
+**GUI: implemented** — a 5th **"Humid Air"** tab (`_build_humidair_tab` + `_on_humidair_compute`/
+`_on_humidair_plot`/`_on_humid_mode_changed`/`_populate_humidair`, lazy `self._humidair`). Left:
+T/P + humidity mode (Saturated / Relative humidity / Humidity ratio / Mole fraction) + Compute, and
+a grouped results table (saturation limit · actual state · bulk · molar thermodynamics). Right: the
+water-vapour partition-function contribution table + a plot (P_sat / max mole fraction / max
+humidity ratio / RH vs T) on a themed `_PlotCanvas`. Tabs are now Properties/Plot/Transport/**Humid
+Air**/Validate (Validate moved to index 4). `_apply_theme` recolours `humid_canvas` and re-polishes
+the humid buttons; window construction stays iapws-free (HumidAir built lazily on first Compute).
+`test_gui.py`: tab-count test updated to 5 + `test_humidair_tab_computes_and_plots`.
+
+**Plot perf fix:** `plot_humidity_ratio_vs_T` / `plot_relative_humidity_vs_T` previously called the
+full `HumidAir.state()` per point (redundant dew-point bisection + mixture build) → ~27 s for 80
+points, which froze the GUI ("failed"). Rewritten to compute directly from `P_sat(T)`
+(`w_s = ε P_sat/(P−P_sat)`, `RH = P_v/P_sat`) → ~1 s, values bit-identical; above boiling
+(`P_sat ≥ P`) → NaN (blank). Tests: `test_humidity_ratio_plot_matches_definition_and_handles_
+boiling`, `test_relative_humidity_plot_is_direct`.
+
+## Humid Air — comparative graphical analysis (complete)
+
+Extended the humid-air module with two comparative analyses + GUI section + interactive/export.
+
+**`humidair/analysis.py` (new):** `PsychrometricAnalysis(model)` + `ComparisonTable` dataclass
+(x, x_K, columns dict, meta; `to_dataframe`/`to_csv`/`to_excel`). `COMPARISON_PROPERTIES` maps 9
+display names → (MixtureProperties field, unit): H,U,S,G,A,Cp,Cv,T_v,T_p.
+- `water_vapor_content(T_range,P,*,relative_humidity|humidity_ratio|mole_fraction,temperature_unit,
+  T_ref)` → actual w & saturation w_sat (g/kg) + RH; actual = min(w_fixed, w_sat) so it tracks
+  saturation below the dew point (condensation) and plateaus above; meta has dew_point.
+- `property_comparison(prop_field,T_range,P,*,isobaric,isochoric,temperature_unit,humidity,T_ref)`
+  → up to 4 columns (dry/humid × const-P/const-V). **Physics:** isochoric holds molar volume at
+  `v_ref=RT_ref/P` so `P(T)=P·T/T_ref`. U/H/Cp/Cv/T_v/T_p are T-only → const-P≡const-V (curves
+  coincide, `meta["pressure_independent"]=True`); only S/G/A differ. Composition held fixed (no
+  condensation in this comparison — that's the water-vapour-content graph's job).
+
+**`humidair/plots.py`:** `plot_water_vapor_content_vs_T` (actual solid + saturation dashed, dew-
+point axvline + "onset of condensation" annotation + shaded condensation region) and
+`plot_property_comparison` (4 curves: dry/humid by hue #0072B2/#D55E00, P/V by linestyle; note
+appended for T-only props). Both return `(ComparisonTable, ax)`. Interactivity helpers
+`make_pickable_legend(ax)` (click legend → toggle curve) and `add_hover_tooltip(ax)` (nearest-point
+annotation) — `interactive=True` wires them; both `# pragma: no cover` (need a live canvas).
+
+**GUI — dedicated "Thermodynamic Comparisons" tab** (`_build_comparisons_tab`), inserted **after
+Humid Air** so the graph gets a full-width, full-height canvas (tabs are now Properties/Plot/
+Transport/Humid Air/**Thermodynamic Comparisons**/Validate → **6 tabs**, Validate at index 5).
+Compact controls card on top: Analysis combo (Water vapor content / Dry-vs-Humid property),
+Property combo (9), Constant P / Constant V checkboxes, P/Tmin/Tmax/N, X-unit (K/°C), its **own**
+humidity mode+value, and **Plot / Export Graph / Export Data**. `_on_comparison_plot` draws on
+`cmp_canvas` (`interactive=True`) and caches `self._cmp_table`; `_on_comparison_export_graph` →
+QFileDialog PNG(dpi=300)/SVG/PDF; `_on_comparison_export_data` → CSV/Excel;
+`_on_comparison_analysis_changed`/`_on_comparison_mode_changed` gate the property/value controls.
+Widgets are `cmp_*`; `cmp_plot_btn` in theme re-polish, `cmp_canvas` recoloured in `_apply_theme`.
+(The comparison was first added as a section inside the Humid Air tab, then **moved to its own
+tab** for space — the Humid Air tab keeps only the psychrometric single-curve plots.)
+
+**Thermal Fields Comparison (independence verified).** Third analysis option on the Comparisons
+tab: `PsychrometricAnalysis.thermal_fields_comparison` + `plots.plot_thermal_fields_comparison`
+→ 4 curves: dry/humid × {T_v = U_m/Cv_m (const V), T_p = H_m/Cp_m (const P)}. **Each field is
+computed from its OWN mixture's `mixture.compute()`** (independent `U_m/H_m/Cv_m/Cp_m`) — no
+cross-use of dry properties for humid or vice versa. Verified numerically: dry ≠ humid at every T
+(dry T_v 318.75 vs humid 318.63 K; dry T_p 319.11 vs humid 319.02 K at 320 K/50 %RH) and each
+equals its own U/Cv, H/Cp. Differences are small (~0.1–0.4 K over a wide T range, honest physics —
+air's fields are ≈T), so the plot annotates the max |humid−dry| spread (`meta.max_diff_Tv/Tp`) to
+make the distinction evident without zooming. GUI: `cmp_analysis` index 2 (property/const-P/V
+controls disabled), dispatched in `_on_comparison_plot`.
+
+**Tests:** `test_humidair.py` +6 (actual-capped-by-saturation with dew point, 4-curve S vs coincident
+Cp, ComparisonTable CSV/Excel export, plots return table+axes, °C unit, **thermal-fields
+independence + no-reuse**). `test_gui.py` `test_thermodynamic_comparisons_tab` (dedicated tab,
+both analyses, 4 curves, CSV export). All new code ruff-clean.
+
 ## Plan file
 
 `C:\Users\ileao\.claude\plans\synthetic-wobbling-glacier.md` — the approved Phase-3 plan

@@ -25,6 +25,7 @@ from cmd import Cmd
 from ..core.state import State
 from ..database import get, list_molecules
 from ..fluids import available_fluids, get_fluid
+from ..humidair import HumidAir
 from ..io import Exporter
 from ..mixture import IdealGasMixture
 from ..plots import MOLAR_PROPS, PARTITION_PROPS, plot_property
@@ -306,6 +307,64 @@ class StatThermoPyShell(Cmd):
             return
         print(f"  exported -> {path}")
 
+    def do_humidair(self, arg: str) -> None:
+        """Statistical humid air — maximum water-vapour solubility at the current (T, P).
+
+        ``humidair``                -> saturation limit (maximum water the air can hold)
+        ``humidair rh=0.5``         -> at 50 % relative humidity
+        ``humidair w=0.012``        -> at humidity ratio 0.012 kg/kg dry air
+        ``humidair x=0.02``         -> at H2O mole fraction 0.02
+        ``humidair <psat|solubility|w|rh> Tmin Tmax [N] [out.png]`` -> plot vs T
+        """
+        parts = _split(arg)
+        T = self.T if self.T is not None else 298.15
+        P = self.P if self.P is not None else 101325.0
+        ha = HumidAir()
+        plot_keys = {"psat", "solubility", "w", "rh"}
+        if parts and parts[0] in plot_keys:
+            self._humidair_plot(ha, parts, P)
+            return
+        rh = w = xw = None
+        for tok in parts:
+            low = tok.lower()
+            try:
+                if low.startswith("rh="):
+                    rh = float(tok[3:])
+                elif low.startswith("w="):
+                    w = float(tok[2:])
+                elif low.startswith("x="):
+                    xw = float(tok[2:])
+            except ValueError:
+                print(f"  error: cannot parse {tok!r}")
+                return
+        try:
+            st = ha.state(T, P, relative_humidity=rh, humidity_ratio=w, mole_fraction=xw)
+        except ValueError as exc:
+            print(f"  error: {exc}")
+            return
+        self._print_humidair(st)
+
+    @staticmethod
+    def _humidair_plot(ha, parts: list[str], P: float) -> None:
+        import numpy as np
+
+        from ..humidair import plots as hp
+        key = parts[0]
+        Tmin = float(parts[1]) if len(parts) > 1 else 273.16
+        Tmax = float(parts[2]) if len(parts) > 2 else 373.15
+        npts = int(float(parts[3])) if len(parts) > 3 else 100
+        out = parts[4] if len(parts) > 4 else f"humidair_{key}.png"
+        Ts = np.linspace(Tmin, Tmax, npts)
+        fn = {
+            "psat": lambda: hp.plot_saturation_pressure_vs_T(Ts, model=ha),
+            "solubility": lambda: hp.plot_max_solubility_vs_T(Ts, P=P, model=ha),
+            "w": lambda: hp.plot_humidity_ratio_vs_T(Ts, P=P, model=ha),
+            "rh": lambda: hp.plot_relative_humidity_vs_T(Ts, 0.01, P=P, model=ha),
+        }[key]
+        ax = fn()
+        ax.figure.savefig(out, dpi=120, bbox_inches="tight")
+        print(f"  saved plot -> {out}")
+
     def do_transport(self, arg: str) -> None:
         """Transport properties of the selected gas.
 
@@ -375,6 +434,40 @@ class StatThermoPyShell(Cmd):
             val = getattr(res, prop)
             unit = TRANSPORT_UNITS.get(prop, "")
             print(f"    {prop:8s} = {val:14.6g}  {unit}")
+
+    @staticmethod
+    def _print_humidair(st) -> None:
+        tag = "SATURATED (maximum solubility)" if st.saturated else "moist air"
+        print(f"  Statistical Humid Air — {tag}")
+        print(f"  T = {st.T:.4f} K ({st.T-273.15:.2f} C)   P = {st.P:.6g} Pa   "
+              f"liquid model: {st.liquid_model}")
+        print("  --- Saturation limit (max water the air can hold) ---")
+        print(f"    P_sat                 = {st.P_sat:14.4f}  Pa")
+        print(f"    x_H2O,max             = {st.x_h2o_max:14.6f}  mol/mol")
+        print(f"    mass_fraction,max     = {st.mass_fraction_h2o_max:14.6f}  kg/kg")
+        print(f"    humidity_ratio,max    = {st.humidity_ratio_max*1e3:14.6f}  g/kg dry air")
+        print(f"    abs_humidity,max      = {st.absolute_humidity_max*1e3:14.6f}  g/m3")
+        print(f"    vapor_conc,max        = {st.vapor_concentration_max:14.6f}  mol/m3")
+        print("  --- Actual state ---")
+        print(f"    relative_humidity     = {st.relative_humidity:14.6f}")
+        print(f"    humidity_ratio        = {st.humidity_ratio*1e3:14.6f}  g/kg dry air")
+        print(f"    x_H2O                 = {st.x_h2o:14.6f}  mol/mol")
+        print(f"    degree_of_saturation  = {st.degree_of_saturation:14.6f}")
+        print(f"    dew_point             = {st.dew_point:14.4f}  K ({st.dew_point-273.15:.2f} C)")
+        print(f"    wet_bulb              = {st.wet_bulb:14.4f}  K ({st.wet_bulb-273.15:.2f} C)")
+        print("  --- Mixture bulk ---")
+        print(f"    density               = {st.density:14.6f}  kg/m3")
+        print(f"    M_avg                 = {st.M_avg*1e3:14.6f}  g/mol")
+        print(f"    R_specific            = {st.R_specific:14.6f}  J/kg/K")
+        print("  --- Thermodynamics (molar) ---")
+        for p, u in [("U_m", "J/mol"), ("H_m", "J/mol"), ("S_m", "J/mol/K"), ("A_m", "J/mol"),
+                     ("G_m", "J/mol"), ("Cv_m", "J/mol/K"), ("Cp_m", "J/mol/K"),
+                     ("gamma", "-"), ("mu_m", "J/mol"), ("S_mixing", "J/mol/K")]:
+            print(f"    {p:9s} = {getattr(st, p):16.6f}  {u}")
+        print("  --- Water-vapour partition-function contributions (to G_m, J/mol) ---")
+        print(f"    {'factor':14s}{'G_m':>14}{'S_m':>12}{'Cv_m':>10}")
+        for name, c in st.vapor_mode_contributions.items():
+            print(f"    {name:14s}{c['G_m']:14.3f}{c['S_m']:12.4f}{c['Cv_m']:10.4f}")
 
     def do_quit(self, _arg: str) -> bool:
         """Exit the terminal."""
@@ -493,6 +586,12 @@ def _run_transport(args: argparse.Namespace) -> None:
         print(f"  saved plot -> {args.png}")
 
 
+def _run_humidair(args: argparse.Namespace) -> None:
+    """One-shot humid-air computation: print the saturated (or given-RH) state at (T, P)."""
+    st = HumidAir().state(args.T, args.P, relative_humidity=args.rh)
+    StatThermoPyShell._print_humidair(st)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="statthermopy", description="StatThermoPy CLI.")
     sub = p.add_subparsers(dest="command")
@@ -527,6 +626,13 @@ def _build_parser() -> argparse.ArgumentParser:
     tr.add_argument("--N", type=int, default=100, help="number of plot points")
     tr.add_argument("--png", help="save a property-vs-T plot to this path")
 
+    # one-shot humid air
+    hu = sub.add_parser("humidair", help="statistical humid air / maximum water solubility")
+    hu.add_argument("--T", type=float, default=298.15, help="temperature (K)")
+    hu.add_argument("--P", type=float, default=101325.0, help="total pressure (Pa)")
+    hu.add_argument("--rh", type=float, default=None,
+                    help="relative humidity 0-1 (default: saturated = maximum solubility)")
+
     return p
 
 
@@ -539,6 +645,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "transport":
         _run_transport(args)
+        return 0
+    if args.command == "humidair":
+        _run_humidair(args)
         return 0
     # default: interactive REPL
     try:

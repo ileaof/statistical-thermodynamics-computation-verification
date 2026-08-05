@@ -51,6 +51,7 @@ from .fluids import (
     register_fluid,
 )
 from .mixture import ComponentContribution, IdealGasMixture, MixtureProperties
+from .humidair import HumidAir, HumidAirState, SaturationCalculator
 from .modes import Electronic, HinderedRotor, Rotational, Translational, Vibrational
 from .partition import PartitionFunction, PartitionValues
 from .thermodynamics import ThermoProperties, Thermodynamics
@@ -78,6 +79,9 @@ __all__ = [
     "IdealGasMixture",
     "MixtureProperties",
     "ComponentContribution",
+    "HumidAir",
+    "HumidAirState",
+    "SaturationCalculator",
     "air",
     "PredefinedFluid",
     "available_fluids",

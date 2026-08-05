@@ -50,6 +50,8 @@ from PySide6.QtWidgets import (
 from ..core.state import State
 from ..database import get, list_molecules
 from ..fluids import available_fluids, get_fluid
+from ..humidair import COMPARISON_PROPERTIES, HumidAir
+from ..humidair import plots as humid_plots
 from ..io import Exporter
 from ..mixture import IdealGasMixture
 from ..plots import (
@@ -158,6 +160,8 @@ class StatThermoPyWindow(QMainWindow):
         tabs.addTab(self._build_properties_tab(), "Properties")
         tabs.addTab(self._build_plot_tab(), "Plot")
         tabs.addTab(self._build_transport_tab(), "Transport")
+        tabs.addTab(self._build_humidair_tab(), "Humid Air")
+        tabs.addTab(self._build_comparisons_tab(), "Thermodynamic Comparisons")
         tabs.addTab(self._build_validate_tab(), "Validate")
         self.setCentralWidget(tabs)
         self._tabs = tabs
@@ -528,6 +532,434 @@ class StatThermoPyWindow(QMainWindow):
         self._transport_map = None    # (prop, T_range, P_range, n) of the last 2-D map (Tecplot)
         return tab
 
+    def _build_humidair_tab(self) -> QWidget:
+        """Statistical Humid Air tab: maximum water-vapour solubility + full psychrometrics.
+
+        Left: state inputs (T, P, humidity mode) and a results table (saturation limit, actual
+        state, mixture bulk, molar thermodynamics). Right: the water-vapour partition-function
+        contribution breakdown and a plot (P_sat / solubility / humidity ratio / RH vs T). The
+        gas phase is pure statistical mechanics; the saturation is the ``μ_v = μ_l`` solver.
+        """
+        tab = QWidget()
+        root = QHBoxLayout(tab)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
+        splitter = QSplitter(Qt.Horizontal)
+
+        # --- left: inputs + results ------------------------------------------
+        left = QWidget()
+        llay = QVBoxLayout(left)
+        llay.setContentsMargins(0, 0, 0, 0)
+        llay.setSpacing(10)
+
+        card = QFrame()
+        card.setObjectName("Card")
+        form = QVBoxLayout(card)
+        form.setContentsMargins(10, 8, 10, 8)
+        form.setSpacing(8)
+        row1 = QHBoxLayout()
+        self.humid_T = self._make_spin(200.0, 640.0, 298.15)
+        self.humid_P = self._make_spin(1.0, 1.0e8, 101325.0)
+        row1.addWidget(QLabel("T (K):"))
+        row1.addWidget(self.humid_T)
+        row1.addWidget(QLabel("P (Pa):"))
+        row1.addWidget(self.humid_P)
+        row1.addStretch()
+        form.addLayout(row1)
+        row2 = QHBoxLayout()
+        self.humid_mode = QComboBox()
+        self.humid_mode.addItems(
+            ["Saturated (max)", "Relative humidity", "Humidity ratio [kg/kg]", "Mole fraction"]
+        )
+        self.humid_mode.currentIndexChanged.connect(self._on_humid_mode_changed)
+        self.humid_value = self._make_spin(0.0, 10.0, 0.5)
+        row2.addWidget(QLabel("Humidity:"))
+        row2.addWidget(self.humid_mode)
+        row2.addWidget(QLabel("value:"))
+        row2.addWidget(self.humid_value)
+        self.humid_btn = QPushButton("Compute")
+        self.humid_btn.setProperty("primary", True)
+        self.humid_btn.clicked.connect(self._on_humidair_compute)
+        row2.addWidget(self.humid_btn)
+        row2.addStretch()
+        form.addLayout(row2)
+        llay.addWidget(card)
+
+        self.humid_table = QTableWidget(0, 3, self)
+        self.humid_table.setAlternatingRowColors(True)
+        self.humid_table.setHorizontalHeaderLabels(["Property", "Value", "Unit"])
+        self.humid_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.humid_table.verticalHeader().setVisible(False)
+        llay.addWidget(self.humid_table, 1)
+
+        # --- right: vapour breakdown + plot ----------------------------------
+        right = QWidget()
+        rlay = QVBoxLayout(right)
+        rlay.setContentsMargins(0, 0, 0, 0)
+        rlay.setSpacing(10)
+
+        vbox = QGroupBox("Water-vapour partition-function contributions")
+        vlay = QVBoxLayout(vbox)
+        vlay.setContentsMargins(8, 8, 8, 8)
+        self.humid_modes_table = QTableWidget(0, 4, self)
+        self.humid_modes_table.setAlternatingRowColors(True)
+        self.humid_modes_table.setHorizontalHeaderLabels(
+            ["Factor", "G_m [J/mol]", "S_m [J/mol/K]", "Cv_m [J/mol/K]"]
+        )
+        self.humid_modes_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.humid_modes_table.verticalHeader().setVisible(False)
+        self.humid_modes_table.setMaximumHeight(170)
+        vlay.addWidget(self.humid_modes_table)
+        rlay.addWidget(vbox)
+
+        card2 = QFrame()
+        card2.setObjectName("Card")
+        c2 = QHBoxLayout(card2)
+        c2.setContentsMargins(10, 8, 10, 8)
+        c2.setSpacing(8)
+        self.humid_plot_prop = QComboBox()
+        self.humid_plot_prop.addItems(
+            ["Saturation pressure", "Max mole fraction", "Max humidity ratio", "Relative humidity"]
+        )
+        c2.addWidget(QLabel("Plot:"))
+        c2.addWidget(self.humid_plot_prop)
+        self.humid_tmin = self._make_spin(200.0, 640.0, 273.16)
+        self.humid_tmax = self._make_spin(200.0, 640.0, 373.15)
+        self.humid_npts = QSpinBox()
+        self.humid_npts.setRange(10, 2000)
+        self.humid_npts.setValue(80)
+        c2.addWidget(QLabel("Tmin:"))
+        c2.addWidget(self.humid_tmin)
+        c2.addWidget(QLabel("Tmax:"))
+        c2.addWidget(self.humid_tmax)
+        c2.addWidget(QLabel("N:"))
+        c2.addWidget(self.humid_npts)
+        self.humid_plot_btn = QPushButton("Plot")
+        self.humid_plot_btn.setProperty("primary", True)
+        self.humid_plot_btn.clicked.connect(self._on_humidair_plot)
+        c2.addWidget(self.humid_plot_btn)
+        c2.addStretch()
+        rlay.addWidget(card2)
+
+        self.humid_status = QLabel(
+            "Compute the maximum water-vapour solubility at (T, P). 'Saturated' gives the "
+            "dew-point limit; pick a humidity mode for a sub-saturated state. Vapour phase is "
+            "statistical mechanics; saturation is the μ_v = μ_l solver (no Antoine/Magnus)."
+        )
+        self.humid_status.setWordWrap(True)
+        rlay.addWidget(self.humid_status)
+
+        self.humid_canvas = _PlotCanvas()
+        rlay.addWidget(self.humid_canvas, 1)
+
+        splitter.addWidget(left)
+        splitter.addWidget(right)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([460, 640])
+        root.addWidget(splitter)
+
+        self._humidair = None  # lazy HumidAir (constructs the liquid model on first use)
+        self._on_humid_mode_changed()
+        return tab
+
+    # -- Humid Air tab ---------------------------------------------------------
+    def _humid_model(self) -> HumidAir:
+        if self._humidair is None:
+            self._humidair = HumidAir()
+        return self._humidair
+
+    def _on_humid_mode_changed(self) -> None:
+        # the value spinbox is only meaningful for the sub-saturated modes
+        self.humid_value.setEnabled(self.humid_mode.currentIndex() != 0)
+
+    def _on_humidair_compute(self) -> None:
+        T = float(self.humid_T.value())
+        P = float(self.humid_P.value())
+        mode = self.humid_mode.currentIndex()
+        val = float(self.humid_value.value())
+        kwargs: dict = {}
+        if mode == 1:
+            kwargs["relative_humidity"] = val
+        elif mode == 2:
+            kwargs["humidity_ratio"] = val
+        elif mode == 3:
+            kwargs["mole_fraction"] = val
+        try:
+            st = self._humid_model().state(T, P, **kwargs)
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Humid Air", f"Computation failed:\n{exc}")
+            return
+        self._populate_humidair(st)
+
+    def _populate_humidair(self, st) -> None:
+        C = 273.15
+        rows = [
+            ("— Saturation limit (max water) —", None, None),
+            ("P_sat", st.P_sat, "Pa"),
+            ("x_H2O max", st.x_h2o_max, "mol/mol"),
+            ("humidity ratio max", st.humidity_ratio_max * 1e3, "g/kg dry air"),
+            ("mass fraction max", st.mass_fraction_h2o_max, "kg/kg"),
+            ("absolute humidity max", st.absolute_humidity_max * 1e3, "g/m^3"),
+            ("vapour conc. max", st.vapor_concentration_max, "mol/m^3"),
+            ("— Actual state —", None, None),
+            ("relative humidity", st.relative_humidity, "-"),
+            ("humidity ratio", st.humidity_ratio * 1e3, "g/kg dry air"),
+            ("x_H2O", st.x_h2o, "mol/mol"),
+            ("degree of saturation", st.degree_of_saturation, "-"),
+            ("dew point", st.dew_point - C, "deg C"),
+            ("wet-bulb", st.wet_bulb - C, "deg C"),
+            ("— Mixture bulk —", None, None),
+            ("density", st.density, "kg/m^3"),
+            ("M_avg", st.M_avg * 1e3, "g/mol"),
+            ("R_specific", st.R_specific, "J/kg/K"),
+            ("— Thermodynamics (molar) —", None, None),
+            ("U_m", st.U_m, "J/mol"), ("H_m", st.H_m, "J/mol"), ("S_m", st.S_m, "J/mol/K"),
+            ("A_m", st.A_m, "J/mol"), ("G_m", st.G_m, "J/mol"), ("Cv_m", st.Cv_m, "J/mol/K"),
+            ("Cp_m", st.Cp_m, "J/mol/K"), ("gamma", st.gamma, "-"), ("mu_m", st.mu_m, "J/mol"),
+            ("S_mixing", st.S_mixing, "J/mol/K"),
+        ]
+        self.humid_table.setRowCount(len(rows))
+        for i, (label, value, unit) in enumerate(rows):
+            self.humid_table.setItem(i, 0, QTableWidgetItem(label))
+            self.humid_table.setItem(i, 1, QTableWidgetItem("" if value is None else _fmt(value)))
+            self.humid_table.setItem(i, 2, QTableWidgetItem(unit or ""))
+        modes = st.vapor_mode_contributions
+        self.humid_modes_table.setRowCount(len(modes))
+        for i, (name, c) in enumerate(modes.items()):
+            self.humid_modes_table.setItem(i, 0, QTableWidgetItem(name))
+            self.humid_modes_table.setItem(i, 1, QTableWidgetItem(_fmt(c["G_m"])))
+            self.humid_modes_table.setItem(i, 2, QTableWidgetItem(_fmt(c["S_m"])))
+            self.humid_modes_table.setItem(i, 3, QTableWidgetItem(_fmt(c["Cv_m"])))
+        tag = "SATURATED (max solubility)" if st.saturated else f"RH = {st.relative_humidity:.3f}"
+        self.humid_status.setText(
+            f"T = {st.T:.2f} K ({st.T-C:.2f} °C), P = {st.P:.6g} Pa — {tag}. "
+            f"Liquid reference: {st.liquid_model}."
+        )
+
+    def _on_humidair_plot(self) -> None:
+        import numpy as np
+
+        key = self.humid_plot_prop.currentIndex()
+        tmin = float(self.humid_tmin.value())
+        tmax = float(self.humid_tmax.value())
+        n = int(self.humid_npts.value())
+        P = float(self.humid_P.value())
+        if tmax <= tmin:
+            QMessageBox.warning(self, "Humid Air", "Tmax must exceed Tmin.")
+            return
+        Ts = np.linspace(tmin, tmax, n)
+        ha = self._humid_model()
+        ax = self.humid_canvas.ax
+        ax.clear()
+        if key == 0:
+            humid_plots.plot_saturation_pressure_vs_T(Ts, model=ha, ax=ax)
+        elif key == 1:
+            humid_plots.plot_max_solubility_vs_T(Ts, P=P, model=ha, ax=ax)
+        elif key == 2:
+            humid_plots.plot_humidity_ratio_vs_T(Ts, P=P, model=ha, ax=ax)
+        else:
+            w = float(self.humid_value.value()) if self.humid_mode.currentIndex() == 2 else 0.01
+            humid_plots.plot_relative_humidity_vs_T(Ts, w, P=P, model=ha, ax=ax)
+        self.humid_canvas.refresh()
+
+    # ================= Thermodynamic Comparisons tab =========================
+    def _build_comparisons_tab(self) -> QWidget:
+        """Dedicated tab for the dry-vs-humid thermodynamic comparisons and water-vapour content.
+
+        A compact controls card sits above a full-width plot canvas so the comparison graph gets
+        the whole tab. Reuses the same :class:`HumidAir` engine and comparison plot functions as
+        the Humid Air tab; the graph has an interactive (click-to-toggle) legend, hover tooltips,
+        toolbar zoom/pan, and high-resolution PNG/SVG/PDF (graph) + CSV/Excel (data) export.
+        """
+        tab = QWidget()
+        root = QVBoxLayout(tab)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
+
+        card = QFrame()
+        card.setObjectName("Card")
+        clay = QVBoxLayout(card)
+        clay.setContentsMargins(10, 8, 10, 8)
+        clay.setSpacing(6)
+
+        row1 = QHBoxLayout()
+        self.cmp_analysis = QComboBox()
+        self.cmp_analysis.addItems(
+            ["Water vapor content vs T", "Dry vs Humid: property comparison",
+             "Thermal fields: T_v & T_p (dry vs humid)"]
+        )
+        self.cmp_analysis.currentIndexChanged.connect(self._on_comparison_analysis_changed)
+        row1.addWidget(QLabel("Analysis:"))
+        row1.addWidget(self.cmp_analysis, 1)
+        self.cmp_prop = QComboBox()
+        for name in COMPARISON_PROPERTIES:
+            self.cmp_prop.addItem(name)
+        row1.addWidget(QLabel("Property:"))
+        row1.addWidget(self.cmp_prop, 1)
+        self.cmp_isobaric = QCheckBox("Constant P")
+        self.cmp_isochoric = QCheckBox("Constant V")
+        self.cmp_isobaric.setChecked(True)
+        self.cmp_isochoric.setChecked(True)
+        row1.addWidget(self.cmp_isobaric)
+        row1.addWidget(self.cmp_isochoric)
+        clay.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        self.cmp_P = self._make_spin(1.0, 1.0e8, 101325.0)
+        self.cmp_tmin = self._make_spin(200.0, 640.0, 273.16)
+        self.cmp_tmax = self._make_spin(200.0, 640.0, 373.15)
+        self.cmp_npts = QSpinBox()
+        self.cmp_npts.setRange(10, 2000)
+        self.cmp_npts.setValue(80)
+        self.cmp_xunit = QComboBox()
+        self.cmp_xunit.addItems(["K", "°C"])
+        row2.addWidget(QLabel("P (Pa):"))
+        row2.addWidget(self.cmp_P)
+        row2.addWidget(QLabel("Tmin:"))
+        row2.addWidget(self.cmp_tmin)
+        row2.addWidget(QLabel("Tmax:"))
+        row2.addWidget(self.cmp_tmax)
+        row2.addWidget(QLabel("N:"))
+        row2.addWidget(self.cmp_npts)
+        row2.addWidget(QLabel("X:"))
+        row2.addWidget(self.cmp_xunit)
+        row2.addStretch()
+        clay.addLayout(row2)
+
+        row3 = QHBoxLayout()
+        self.cmp_mode = QComboBox()
+        self.cmp_mode.addItems(
+            ["Saturated (max)", "Relative humidity", "Humidity ratio [kg/kg]", "Mole fraction"]
+        )
+        self.cmp_mode.currentIndexChanged.connect(self._on_comparison_mode_changed)
+        self.cmp_value = self._make_spin(0.0, 10.0, 0.5)
+        row3.addWidget(QLabel("Humidity:"))
+        row3.addWidget(self.cmp_mode)
+        row3.addWidget(QLabel("value:"))
+        row3.addWidget(self.cmp_value)
+        self.cmp_plot_btn = QPushButton("Plot")
+        self.cmp_plot_btn.setProperty("primary", True)
+        self.cmp_plot_btn.clicked.connect(self._on_comparison_plot)
+        self.cmp_graph_btn = QPushButton("Export Graph")
+        self.cmp_graph_btn.clicked.connect(self._on_comparison_export_graph)
+        self.cmp_data_btn = QPushButton("Export Data")
+        self.cmp_data_btn.clicked.connect(self._on_comparison_export_data)
+        row3.addWidget(self.cmp_plot_btn)
+        row3.addWidget(self.cmp_graph_btn)
+        row3.addWidget(self.cmp_data_btn)
+        row3.addStretch()
+        clay.addLayout(row3)
+        root.addWidget(card)
+
+        self.cmp_status = QLabel(
+            "Compare dry vs humid air (Enthalpy · Internal energy · Entropy · Gibbs · Helmholtz · "
+            "Cp · Cv · T_v · T_p) under constant P and/or constant V, or plot the water-vapour "
+            "content (actual + saturation). Click a legend entry to show/hide a curve; hover for "
+            "values; use the toolbar to zoom/pan."
+        )
+        self.cmp_status.setWordWrap(True)
+        root.addWidget(self.cmp_status)
+
+        self.cmp_canvas = _PlotCanvas()
+        root.addWidget(self.cmp_canvas, 1)  # full-width, tall canvas fills the tab
+
+        self._cmp_table = None  # last ComparisonTable (for data export)
+        self._on_comparison_analysis_changed()
+        self._on_comparison_mode_changed()
+        return tab
+
+    def _on_comparison_analysis_changed(self) -> None:
+        is_cmp = self.cmp_analysis.currentIndex() == 1
+        self.cmp_prop.setEnabled(is_cmp)
+        self.cmp_isobaric.setEnabled(is_cmp)
+        self.cmp_isochoric.setEnabled(is_cmp)
+
+    def _on_comparison_mode_changed(self) -> None:
+        self.cmp_value.setEnabled(self.cmp_mode.currentIndex() != 0)
+
+    def _comparison_humidity_kwargs(self) -> dict:
+        mode = self.cmp_mode.currentIndex()
+        val = float(self.cmp_value.value())
+        if mode == 1:
+            return {"relative_humidity": val}
+        if mode == 2:
+            return {"humidity_ratio": val}
+        if mode == 3:
+            return {"mole_fraction": val}
+        return {}  # saturated
+
+    def _on_comparison_plot(self) -> None:
+        import numpy as np
+
+        tmin = float(self.cmp_tmin.value())
+        tmax = float(self.cmp_tmax.value())
+        n = int(self.cmp_npts.value())
+        P = float(self.cmp_P.value())
+        if tmax <= tmin:
+            QMessageBox.warning(self, "Comparisons", "Tmax must exceed Tmin.")
+            return
+        Ts = np.linspace(tmin, tmax, n)
+        unit = "C" if self.cmp_xunit.currentIndex() == 1 else "K"
+        ha = self._humid_model()
+        kw = self._comparison_humidity_kwargs()
+        ax = self.cmp_canvas.ax
+        ax.clear()
+        analysis = self.cmp_analysis.currentIndex()
+        try:
+            if analysis == 0:
+                table, _ = humid_plots.plot_water_vapor_content_vs_T(
+                    ha, Ts, P=P, ax=ax, temperature_unit=unit, interactive=True, **kw
+                )
+            elif analysis == 2:
+                table, _ = humid_plots.plot_thermal_fields_comparison(
+                    ha, Ts, P=P, ax=ax, temperature_unit=unit, interactive=True, **kw
+                )
+            else:
+                iso = self.cmp_isobaric.isChecked()
+                isoc = self.cmp_isochoric.isChecked()
+                if not (iso or isoc):
+                    QMessageBox.warning(self, "Comparisons", "Select Constant P and/or Constant V.")
+                    return
+                field = COMPARISON_PROPERTIES[self.cmp_prop.currentText()][0]
+                table, _ = humid_plots.plot_property_comparison(
+                    ha, field, Ts, P=P, ax=ax, temperature_unit=unit,
+                    isobaric=iso, isochoric=isoc, interactive=True, **kw
+                )
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Comparisons", f"Comparison failed:\n{exc}")
+            return
+        self._cmp_table = table
+        self.cmp_canvas.refresh()
+
+    def _on_comparison_export_graph(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Graph", "comparison", "PNG (*.png);;SVG (*.svg);;PDF (*.pdf)"
+        )
+        if not path:
+            return
+        try:
+            self.cmp_canvas.figure.savefig(path, dpi=300, bbox_inches="tight")
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Comparisons", f"Export failed:\n{exc}")
+
+    def _on_comparison_export_data(self) -> None:
+        if self._cmp_table is None:
+            QMessageBox.warning(self, "Comparisons", "Plot first, then export its data.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Data", "comparison", "CSV (*.csv);;Excel (*.xlsx)"
+        )
+        if not path:
+            return
+        try:
+            if path.lower().endswith(".xlsx"):
+                self._cmp_table.to_excel(path)
+            else:
+                self._cmp_table.to_csv(path)
+        except Exception as exc:  # pragma: no cover - GUI error path
+            QMessageBox.critical(self, "Comparisons", f"Export failed:\n{exc}")
+
     def _build_validate_tab(self) -> QWidget:
         tab = QWidget()
         lay = QVBoxLayout(tab)
@@ -635,10 +1067,21 @@ class StatThermoPyWindow(QMainWindow):
             for btn in (self.transport_btn, self.transport_plot_btn):
                 btn.style().unpolish(btn)
                 btn.style().polish(btn)
+        if hasattr(self, "humid_btn"):
+            for btn in (self.humid_btn, self.humid_plot_btn):
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
+        if hasattr(self, "cmp_plot_btn"):
+            self.cmp_plot_btn.style().unpolish(self.cmp_plot_btn)
+            self.cmp_plot_btn.style().polish(self.cmp_plot_btn)
         self.plot_canvas.apply_theme(palette)
         self.val_canvas.apply_theme(palette)
         if hasattr(self, "transport_canvas"):
             self.transport_canvas.apply_theme(palette)
+        if hasattr(self, "humid_canvas"):
+            self.humid_canvas.apply_theme(palette)
+        if hasattr(self, "cmp_canvas"):
+            self.cmp_canvas.apply_theme(palette)
 
     def _on_theme_chosen(self, choice: str) -> None:
         self._theme_choice = choice

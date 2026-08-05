@@ -28,7 +28,21 @@ calculation itself.
   speed of sound, expansion coefficient, isothermal compressibility, Joule–Thomson coefficient.
   Heat capacities and γ come from the partition-function engine; the only molecular inputs are
   the LJ σ/ε (no REFPROP/CoolProp). Curves vs T / vs P, 2-D T×P maps, CSV/Excel/Tecplot/PNG/PDF.
-- **Qt GUI** (optional, PySide6) with Properties / Plot / Transport / Validate tabs and light/dark theming.
+- **Statistical Humid Air** — maximum water-vapour solubility of air vs temperature and pressure
+  from vapour–liquid equilibrium ``μ_v = μ_l``: the vapour Gibbs energy is taken purely from the
+  water partition function (its absolute entropy matches steam's S° to <0.1 %) and the liquid from
+  a pluggable reference (IAPWS-95, or a transparent constant-``c_p`` model), joined by a
+  triple-point anchor — **no Antoine/Magnus/Tetens correlation**. Predicts P_sat to ≈0.1 % near
+  ambient (≈1.5 % at 100 °C) and the full psychrometric set (humidity ratio, absolute/relative
+  humidity, dew point, wet-bulb, degree of saturation, moist-air density, M̄, R, h/u/s/g/a/Cp/Cv/γ)
+  plus per-partition-function breakdowns, curves and a 3-D solubility(T,P) surface. **Comparative
+  graphical analysis**: water-vapour content (actual vs saturation, with condensation onset) and a
+  dry-air-vs-humid-air comparison of any property (H,U,S,G,A,Cp,Cv,T_v,T_p) under isobaric and
+  isochoric constraints (up to four curves), with an interactive legend, hover tooltips,
+  zoom/pan and PNG/SVG/PDF + CSV/Excel export. See
+  [docs/HUMID_AIR.md](docs/HUMID_AIR.md) for the critical analysis of liquid-phase statistical
+  models (SAFT, perturbation theory, integral equations, …).
+- **Qt GUI** (optional, PySide6) with Properties / Plot / Transport / Humid Air / Thermodynamic Comparisons / Validate tabs and light/dark theming.
 - **Automatic validation** against embedded NIST/JANAF reference data (Cp° and S° for all 22
   species in the database; 20 from NIST WebBook Shomate, C2H6/C3H8 from NASA Glenn polynomials).
 - **Performance backends** — pluggable NumPy / Numba / OpenMP / CUDA execution with the same

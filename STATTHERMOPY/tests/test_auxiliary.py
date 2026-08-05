@@ -384,6 +384,32 @@ def test_cli_run_fluid_air(capsys):
     assert "Mixture" in out and "M_avg" in out
 
 
+def test_cli_humidair(capsys):
+    """`humidair` prints the saturation limit, psychrometrics and vapour breakdown."""
+    from statthermopy.cli.app import StatThermoPyShell
+    sh = StatThermoPyShell()
+    sh.onecmd("T = 298.15")
+    sh.onecmd("P = 101325")
+    sh.onecmd("humidair")
+    out = capsys.readouterr().out
+    assert "SATURATED" in out and "P_sat" in out
+    assert "humidity_ratio,max" in out and "dew_point" in out and "wet_bulb" in out
+    assert "partition-function contributions" in out
+    # relative-humidity form
+    sh.onecmd("humidair rh=0.5")
+    out2 = capsys.readouterr().out
+    assert "relative_humidity" in out2
+
+
+def test_cli_run_humidair(capsys):
+    """One-shot `humidair` subcommand runs and reports the saturated state."""
+    from statthermopy.cli.app import main
+    rc = main(["humidair", "--T", "293.15", "--P", "101325"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Humid Air" in out and "P_sat" in out
+
+
 def test_cli_modes(capsys):
     from statthermopy.cli.app import StatThermoPyShell
     sh = StatThermoPyShell()

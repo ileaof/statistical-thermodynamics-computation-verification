@@ -304,6 +304,13 @@ correlation, so the whole path stays free of empirical curves. Compositions are 
 custom mixtures remain available; the registry is deliberately decoupled from how a mixture is
 *evaluated*, leaving room for a future non-ideal (real-gas) mixture model behind the same factory.
 
+**Humid air and water saturation.** The maximum water vapour the air can hold before condensing is
+set by vapour–liquid equilibrium, ``μ_v(T,P) = μ_l(T,P)``, with the vapour Gibbs energy taken
+purely from the water partition function and the liquid from a pluggable reference. The full
+derivation, the triple-point reference reconciliation, the psychrometric property set, and a
+critical analysis of statistical liquid-water models (SAFT, perturbation theory, integral
+equations, …) are in [`HUMID_AIR.md`](HUMID_AIR.md).
+
 ---
 
 ## 8. Chemical equilibrium (architecture only — Phase 1 placeholder)
