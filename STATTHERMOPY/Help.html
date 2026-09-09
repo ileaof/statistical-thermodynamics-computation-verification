@@ -2347,7 +2347,225 @@ reproduz.</p>
   maior desvio de <em>C<sub>p</sub></em> do conjunto, ≈ 4 %.
 </div>
 
-<h3>13.5 Validação pela interface gráfica</h3>
+<h3>13.5 Exemplo completo — verificação do H₂O contra tabela termodinâmica da água</h3>
+
+<p><strong>Objetivo.</strong> Confrontar as propriedades do vapor d'água calculadas pelo motor
+estatístico com dados tabelados, em três etapas: obter os valores do motor, compará-los com a
+referência de gás ideal embarcada (NIST/JANAF) e, por fim, confrontá-los com uma tabela de vapor
+IAPWS-95 — explicitando as duas armadilhas dessa última comparação.</p>
+
+<h4>Etapa 1 — propriedades do motor no estado de referência</h4>
+
+<p>O estado padrão das tabelas termoquímicas é <strong>1 bar = 100 000 Pa</strong>, e não 1 atm.
+A entropia depende da pressão, portanto a comparação só é legítima nesse estado.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas H2O --T 500 --P 100000</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  State: T=500.0000 K  P=100000 Pa  V=4.157231e-02 m^3  n=1 mol  m=0.0180153 kg
+  Molar mass: 18.0153 g/mol
+  --- Molar (per mol) ---
+    U_m     =   12669.547826  J/mol
+    H_m     =   16826.779135  J/mol
+    S_m     =     206.358890  J/mol/K
+    A_m     =  -90509.897271  J/mol
+    G_m     =  -86352.665962  J/mol
+    Cv_m    =      26.803282  J/mol/K
+    Cp_m    =      35.117744  J/mol/K
+    gamma   =       1.310203  -
+    mu_m    =  -86352.665962  J/mol
+  --- Massic (per kg) ---
+    Cp_s           =    1949.331031  J/kg/K
+    R_specific     =     461.522808  J/kg/K
+  --- Partition function ---
+    Qt      =   6.679147e+30
+    Qr      =   9.367008e+01
+    Qv      =   1.010308e+00
+    Qe      =   1.000000e+00
+    Qtotal  =   6.320852e+32
+    ln Q   = 75.526577</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> <code>R_specific</code> = 461,52 J/kg/K é o valor de manual do
+vapor d'água (<em>R</em>/<em>M</em> = 8,3145/0,0180153). <code>Cp_s</code> = 1949 J/kg/K está na
+faixa esperada para vapor superaquecido. <code>Qv</code> = 1,0103 mostra que, mesmo a 500 K, os
+modos vibracionais da água (1595, 3657 e 3756 cm⁻¹) mal começaram a se povoar — a água é uma
+molécula rígida.</p>
+
+<h4>Etapa 2 — contra a referência de gás ideal embarcada (NIST/JANAF)</h4>
+
+<p>Esta é a verificação rigorosa: referência e motor descrevem <em>o mesmo objeto</em>, água em
+fase gasosa ideal a 1 bar, com entropia absoluta de terceira lei.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">python</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>from statthermopy.validation import validate
+
+for prop in ("Cp", "S"):
+    r = validate("H2O", prop)
+    print(f"=== {prop} === média {r.mean_abs_error_percent:.4f} %"
+          f"  máx {r.max_abs_error_percent:.4f} %")
+    print(f"{'T[K]':&gt;8} {'motor':&gt;14} {'referência':&gt;14} {'erro %':&gt;10}")
+    for T, p, ref, e in zip(r.T, r.predicted, r.reference, r.errors_percent):
+        print(f"{T:8.1f} {p:14.4f} {ref:14.4f} {e:+10.3f}")</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>=== Cp === média 0.8084 %  máx 1.9474 %
+    T[K]          motor     referência     erro %
+   500.0        35.1177        35.2184     -0.286
+   600.0        36.2142        36.3179     -0.286
+   800.0        38.5694        38.7365     -0.431
+  1000.0        41.0236        41.2656     -0.586
+  1500.0        46.4897        47.1086     -1.314
+  2000.0        50.2076        51.2048     -1.947
+
+=== S === média 0.1369 %  máx 0.2500 %
+    T[K]          motor     referência     erro %
+   500.0       206.3589       206.5341     -0.085
+   600.0       212.8573       213.0507     -0.091
+   800.0       223.5940       223.8251     -0.103
+  1000.0       232.4639       232.7400     -0.119
+  1500.0       250.1834       250.6198     -0.174
+  2000.0       264.1072       264.7692     -0.250</pre>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <caption>Resumo da verificação do H₂O contra a tabela NIST/JANAF de gás ideal a 1 bar.</caption>
+    <thead><tr><th>Grandeza</th><th>Erro médio absoluto</th><th>Erro máximo</th><th>Onde ocorre</th><th>Tolerância</th></tr></thead>
+    <tbody>
+      <tr><td><em>C<sub>p</sub></em>°</td><td class="num">0,81 %</td><td class="num">1,95 %</td><td>2000 K</td><td class="num">5 %</td></tr>
+      <tr><td><em>S</em>°</td><td class="num">0,14 %</td><td class="num">0,25 %</td><td>2000 K</td><td class="num">5 %</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p><strong>Como interpretar.</strong> Os erros são <em>todos negativos</em> e crescem
+monotonicamente com a temperatura — a assinatura inconfundível da anarmonicidade desprezada. O
+oscilador harmônico espaça os níveis vibracionais uniformemente; o potencial real se alarga e
+oferece níveis mais próximos em energia alta, que o modelo não povoa. Daí a subestimação de
+<em>C<sub>p</sub></em>, que a 2000 K chega a 1,95 %. A entropia é dez vezes mais robusta
+(0,25 % no pior caso), porque é dominada pelos modos translacional e rotacional, tratados
+exatamente.</p>
+
+<div class="callout note">
+  <span class="label">Faixa de temperatura da referência</span>
+  O ajuste de Shomate do NIST para H₂O em fase gasosa começa em 500 K, de modo que a grade
+  embarcada inicia nesse valor. Comparações a 298,15 K ou 400 K exigiriam uma fonte de baixa
+  temperatura distinta, ainda não incorporada.
+</div>
+
+<h4>Etapa 3 — contra uma tabela de vapor IAPWS-95</h4>
+
+<p>Comparar diretamente com uma tabela de vapor (IAPWS-95, ASME, Çengel) exige atenção a
+<strong>duas diferenças de convenção</strong>, sem as quais os números parecem discordar
+grosseiramente:</p>
+
+<ol>
+  <li><strong>Estado de referência da entropia.</strong> As tabelas de vapor adotam
+  <em>s</em> = 0 para o <em>líquido saturado no ponto triplo</em> (273,16 K). O motor devolve a
+  entropia <strong>absoluta de terceira lei</strong> (<em>S</em> → 0 quando <em>T</em> → 0). As
+  duas escalas diferem por uma constante aditiva.</li>
+  <li><strong>Gás ideal vs fluido real.</strong> O motor é estritamente de gás ideal. A IAPWS-95
+  descreve o fluido real e, mesmo a 1 bar, carrega uma pequena correção de não idealidade.</li>
+</ol>
+
+<p>O trecho a seguir isola as duas diferenças, medindo o deslocamento de entropia à medida que a
+pressão diminui e o vapor real se aproxima do gás ideal:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">python</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>from iapws import IAPWS95                      # pip install -e ".[humidair]"
+from statthermopy import Thermodynamics, State
+from statthermopy.database import get
+
+M = 0.0180153                                  # kg/mol
+h2o = get("H2O")
+
+print(f"{'P [Pa]':&gt;12} {'motor':&gt;14} {'IAPWS':&gt;14} {'desloc.':&gt;12}")
+for P_MPa in (0.1, 0.01, 0.001, 0.0001):
+    P = P_MPa * 1e6
+    agua = IAPWS95(T=500, P=P_MPa)
+    S_motor = Thermodynamics(h2o, State(T=500, P=P)).compute().S_m
+    S_iapws = agua.s * 1000 * M                # kJ/kg/K -&gt; J/mol/K
+    print(f"{P:12.0f} {S_motor:14.4f} {S_iapws:14.4f} {S_motor - S_iapws:12.4f}")</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída — deslocamento de entropia a 500 K</div>
+<pre>      P [Pa]          motor          IAPWS      desloc.
+      100000       206.3589       143.1267      63.2321
+       10000       225.5036       162.3637      63.1400
+        1000       244.6484       181.5174      63.1310
+         100       263.7932       200.6629      63.1303</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> Este é o resultado mais instrutivo do exemplo. O
+deslocamento <em>não</em> é arbitrário: converge para <strong>63,130 J/mol/K</strong> à medida que
+<em>P</em> → 0, e esse limite é precisamente a <strong>entropia absoluta de terceira lei da água
+líquida saturada no ponto triplo</strong> — o ponto que a IAPWS define como zero. Em outras
+palavras:</p>
+
+<div class="equation">
+  <em>S</em>°<sub>absoluta</sub>(<em>T</em>, <em>P</em>) ≈
+  <em>s</em><sub>tabela de vapor</sub>(<em>T</em>, <em>P</em>) + 63,13 J/mol/K
+  <span class="caption">Convertendo antes de kJ/kg/K para J/mol/K pela massa molar
+  (× 1000 × 0,0180153). A igualdade é exata no limite de gás ideal.</span>
+</div>
+
+<p>O resíduo a 1 bar (63,2321 contra 63,1303) é de 0,102 J/mol/K, ou 0,05 % — <em>não</em> é erro
+do motor, e sim a não idealidade real do vapor a 1 bar, que a IAPWS captura e o gás ideal, por
+construção, não. À medida que a pressão cai, esse resíduo desaparece, e a concordância passa a
+ser exata dentro do arredondamento.</p>
+
+<p>O mesmo raciocínio vale para <em>C<sub>p</sub></em>, sem a complicação do estado de referência,
+pois capacidades caloríficas não carregam constante aditiva:</p>
+
+<div class="table-wrap">
+  <table>
+    <caption><em>C<sub>p</sub></em> molar do vapor d'água a 1 bar: motor estatístico contra
+    IAPWS-95 (fluido real).</caption>
+    <thead><tr><th><em>T</em> [K]</th><th>Motor (gás ideal)</th><th>IAPWS-95 (real)</th><th>Diferença</th></tr></thead>
+    <tbody>
+      <tr><td class="num">500</td><td class="num">35,1177</td><td class="num">35,6930</td><td class="num">−1,61 %</td></tr>
+      <tr><td class="num">600</td><td class="num">36,2142</td><td class="num">36,5128</td><td class="num">−0,82 %</td></tr>
+      <tr><td class="num">800</td><td class="num">38,5694</td><td class="num">38,7785</td><td class="num">−0,54 %</td></tr>
+      <tr><td class="num">1000</td><td class="num">41,0236</td><td class="num">41,2927</td><td class="num">−0,65 %</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p><strong>Como interpretar.</strong> A discrepância é maior a 500 K (−1,61 %) e cai a 800 K
+(−0,54 %): perto da saturação o vapor real é mais não ideal, e a não idealidade se dissipa ao
+aquecer. Em temperatura alta a curva se inverte, e a anarmonicidade volta a dominar — é ela que
+produz o −1,95 % a 2000 K da Etapa 2.</p>
+
+<div class="callout warn">
+  <span class="label">Não compare a entalpia diretamente</span>
+  <code>H_m</code> = 16 826,8 J/mol no relatório do motor é a entalpia <em>térmica</em> medida a
+  partir de <em>T</em> = 0 K da molécula isolada, ao passo que a entalpia de uma tabela de vapor é
+  medida a partir do líquido saturado no ponto triplo e inclui o calor de vaporização. As duas
+  também diferem por uma constante, mas essa constante <strong>não</strong> é a mesma da entropia:
+  determiná-la exige a entalpia de formação, que o motor não fornece. Use <em>C<sub>p</sub></em> e
+  <em>S</em> para verificar — são as grandezas que comparam sem ambiguidade.
+</div>
+
+<h4>Conclusão da verificação</h4>
+
+<p>Partindo apenas de constantes espectroscópicas — massa molar, três temperaturas rotacionais,
+três números de onda vibracionais e um nível eletrônico —, o motor reproduz a entropia absoluta
+tabelada da água com <strong>0,14 % de erro médio</strong> e a capacidade calorífica com
+<strong>0,81 %</strong>, sobre 500–2000 K. Nenhum coeficiente de correlação participou do cálculo.
+Os desvios residuais têm origem física identificada e sinal previsível: anarmonicidade em alta
+temperatura, não idealidade perto da saturação.</p>
+
+<h3>13.6 Validação pela interface gráfica</h3>
 
 <p>A aba <strong>Validate</strong> executa a mesma comparação, exibindo um selo colorido de
 veredito PASS/FAIL e um gráfico do motor sobreposto à referência (Figura 4).</p>
