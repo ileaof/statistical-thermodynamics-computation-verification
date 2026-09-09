@@ -1,0 +1,39 @@
+name: C6H6
+formula: C6H6
+molar_mass_gmol: 78.114
+geometry: nonlinear
+n_atoms: 12
+symmetry_number: 12
+# Planar oblate symmetric top (D6h): A = B = 0.18960, C = 0.09484 cm-1
+# -> theta = hc*B/k
+rotational_temperatures: [0.273, 0.273, 0.136]
+# 30 internal DOF (3N-6) as harmonic oscillators: grouped D6h fundamentals
+# (NIST CCCBDB / Herzberg / Shimanouchi); degeneracies sum to 30.
+vibrational_modes:
+  - {wavenumber_cm1: 3073.0, degeneracy: 1}   # a1g CH stretch
+  - {wavenumber_cm1: 3063.0, degeneracy: 3}   # e2g + b1u CH stretch
+  - {wavenumber_cm1: 3074.0, degeneracy: 2}   # e1u CH stretch
+  - {wavenumber_cm1: 1596.0, degeneracy: 2}   # e2g C-C stretch
+  - {wavenumber_cm1: 1606.0, degeneracy: 1}   # b2g C-C stretch
+  - {wavenumber_cm1: 992.0, degeneracy: 1}    # a1g ring breathing (C-C stretch)
+  - {wavenumber_cm1: 1010.0, degeneracy: 1}   # b2u ring C-C stretch
+  - {wavenumber_cm1: 1346.0, degeneracy: 1}   # a2g CH in-plane bend
+  - {wavenumber_cm1: 1178.0, degeneracy: 2}   # e2g CH in-plane bend
+  - {wavenumber_cm1: 1038.0, degeneracy: 2}   # e1u CH in-plane bend
+  - {wavenumber_cm1: 1485.0, degeneracy: 2}   # e1u CH bend / CC stretch
+  - {wavenumber_cm1: 849.0, degeneracy: 2}    # e1g CH out-of-plane bend
+  - {wavenumber_cm1: 967.0, degeneracy: 2}    # e2u CH out-of-plane bend
+  - {wavenumber_cm1: 707.0, degeneracy: 1}    # b1g CH out-of-plane bend
+  - {wavenumber_cm1: 673.0, degeneracy: 1}    # a2u ring out-of-plane bend
+  - {wavenumber_cm1: 606.0, degeneracy: 2}    # e2g ring in-plane bend
+  - {wavenumber_cm1: 398.0, degeneracy: 2}    # e2u ring out-of-plane bend
+  - {wavenumber_cm1: 984.0, degeneracy: 1}    # b2g CH out-of-plane bend
+  - {wavenumber_cm1: 703.0, degeneracy: 1}    # b2g ring out-of-plane bend
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Fundamentals: NIST CCCBDB / Herzberg / Shimanouchi. Nonlinear planar D6h, sigma=12; grouped fundamentals sum to 30 = 3N-6. First excited singlet (1B2u, ~38,000 cm-1) neglected — ground electronic state only."
+
+lennard_jones:
+  sigma_angstrom: 5.349
+  epsilon_over_k: 412.3
+  note: "Poling/Prausnitz/O'Connell (viscosity-based)"

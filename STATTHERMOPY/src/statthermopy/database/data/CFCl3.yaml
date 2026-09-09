@@ -1,0 +1,22 @@
+name: CFCl3
+formula: CFCl3
+molar_mass_gmol: 137.368
+geometry: nonlinear
+n_atoms: 5
+symmetry_number: 3
+rotational_temperatures: [0.0685, 0.0685, 0.0821]
+vibrational_modes:
+  - {wavenumber_cm1: 1081.0, degeneracy: 1}
+  - {wavenumber_cm1: 536.0, degeneracy: 1}
+  - {wavenumber_cm1: 350.0, degeneracy: 1}
+  - {wavenumber_cm1: 846.0, degeneracy: 2}
+  - {wavenumber_cm1: 395.0, degeneracy: 2}
+  - {wavenumber_cm1: 243.0, degeneracy: 2}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "C3v symmetric top (CFC-11); Burcat BURCAT_THR (Gurvich 91/TRC 6-89) fundamentals. Moments from r(C-Cl)=1.761 A, r(C-F)=1.328 A, angle(FCCl)=108.85 deg: IA=IB=354.3, IC=295.4 amu A^2 (theta_rot=0.0685/0.0821 K); 9 fundamentals (3N-6=9). The Burcat IA*IB*IC field for this species is inconsistent (implies Ibar < IC); the geometry value is used."
+
+lennard_jones:
+  sigma_angstrom: 5.29
+  epsilon_over_k: 341.4
+  note: "Estimated (Poling: sigma=0.841 Vc^(1/3), eps/k=1.15 Tb); no tabulated LJ found"

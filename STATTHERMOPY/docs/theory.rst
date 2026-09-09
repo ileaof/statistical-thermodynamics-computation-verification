@@ -141,16 +141,18 @@ Validation against embedded NIST/JANAF data
 --------------------------------------------
 
 StatThermoPy ships curated reference tables of molar :math:`C_p^\circ` and absolute
-:math:`S^\circ` (J/mol/K, standard state 1 bar) for all 22 species in the molecular database
+:math:`S^\circ` (J/mol/K, standard state 1 bar) for all 30 species in the molecular database
 (monoatomic, diatomic, triatomic, and larger polyatomic gases), used only for optional
 cross-checking via :func:`~statthermopy.validation.validate`. **Only the reference values are
 embedded** — no empirical correlation coefficients (NASA/Shomate/JANAF polynomials) live in the
 package, so the calculation core stays pure statistical mechanics. The values were produced by
 evaluating the NIST Chemistry WebBook Shomate equations at a temperature grid (the coefficients
-themselves are not shipped); for C2H6 and C3H8, for which NIST WebBook publishes no Shomate fit,
-the NASA Glenn 7-coefficient polynomials (McBride, Zehe & Gordon, NASA/TP-2002-211556) are used
-instead, again with only the values shipped. Each YAML under
-``statthermopy.validation.data`` cites its source.
+themselves are not shipped); I2's gas-phase Shomate fit covers 457.666–2000 K (above the 1 atm
+sublimation point), so its grid starts at 500 K. For C2H6, C3H8 and C6H6, for which NIST WebBook
+publishes no Shomate fit, the NASA Glenn 7-coefficient polynomials (McBride, Zehe & Gordon,
+NASA/TP-2002-211556) are used instead, and CH3CCl3 uses the Burcat & Ruscic NASA-7 polynomial
+(T11/03, respecth.elte.hu) for the same reason; again with only the values shipped. Each YAML
+under ``statthermopy.validation.data`` cites its source.
 
 Because :math:`C_p` is pressure-independent for an ideal gas and :math:`S^\circ` is an absolute
 third-law quantity, both compare directly to the engine's molar output — no reference-state

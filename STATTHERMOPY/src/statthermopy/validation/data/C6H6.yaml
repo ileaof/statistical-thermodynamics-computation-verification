@@ -1,0 +1,11 @@
+species: C6H6
+source: "NASA Glenn 7-coefficient polynomial (McBride, Zehe & Gordon, NASA/TP-2002-211556, via Cantera nasa_gas.yaml, note L 1/91), evaluated at the T grid below. Standard state 1 bar. Curated 2026-09-09; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear planar (D6h). Reference from NASA Glenn polynomials (NIST WebBook has no gas-phase
+  Shomate for benzene). Cp(298.15) = 82.44 J/mol/K and S(298.15) = 269.0 J/mol/K per NIST
+  tabulated gas data; the polynomial fit reproduces them to <1%. Deviations of the
+  harmonic-oscillator model grow modestly toward high T (ring-mode anharmonicity).
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [81.9237, 111.8677, 159.9477, 189.9193, 211.3226, 240.9374, 257.9645]
+S:  [269.1650, 297.4774, 352.5213, 403.0311, 447.6867, 539.4780, 611.3680]

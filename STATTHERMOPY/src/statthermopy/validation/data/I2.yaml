@@ -1,0 +1,11 @@
+species: I2
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for I2(g) (Chase 1998), evaluated at the T grid below. Standard state 1 bar. Curated 2026-09-09; refinable."
+pressure: 100000.0
+notes: >
+  Linear diatomic. The NIST Shomate fit for I2(g) covers 457.666-2000 K (gas above the
+  1 atm sublimation point), so the grid starts at 500 K. The rigid-rotor/harmonic-oscillator
+  model agrees within a few percent over this range; I2's very low vibrational frequency
+  (214.5 cm-1, fully excited already at room T) and its anharmonicity keep deviations small.
+T:  [500.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [37.4763, 37.5951, 37.7929, 38.0616, 39.5381, 42.8567]
+S:  [279.9300, 286.7739, 297.6161, 306.0760, 321.7400, 333.5153]

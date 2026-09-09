@@ -2,7 +2,7 @@
 
 Validates the Chapman–Enskog / Lennard–Jones transport engine, the ideal-gas thermophysical
 coefficients, the derived dimensionless groups, continuity down to T = 0, the binary-diffusion
-combining rules and symmetry, the Lennard–Jones schema migration of all 22 species, and the
+combining rules and symmetry, the Lennard–Jones schema migration of all 30 species, and the
 vectorised ``property_vs_T`` helper against per-point evaluation.
 """
 
@@ -286,12 +286,12 @@ def test_t_star_zero_is_finite():
     assert math.isfinite(omega_22(0.0))
 
 
-# -- all 22 species carry LJ params ---------------------------------------------
+# -- all 30 species carry LJ params ---------------------------------------------
 
 
 def test_all_species_have_lennard_jones():
     names = list_molecules()
-    assert len(names) == 22
+    assert len(names) == 30
     for name in names:
         mol = get(name)
         assert mol.has_lennard_jones, f"{name} is missing lennard_jones parameters"

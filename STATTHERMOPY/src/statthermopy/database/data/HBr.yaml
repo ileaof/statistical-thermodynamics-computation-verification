@@ -1,0 +1,17 @@
+name: HBr
+formula: HBr
+molar_mass_gmol: 80.9119
+geometry: linear
+n_atoms: 2
+symmetry_number: 1
+rotational_temperatures: [12.18]
+vibrational_modes:
+  - {wavenumber_cm1: 2648.98, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCBDB. Ground X1Sigma+; Be=8.4662 cm-1 (theta_rot=12.18 K), we=2648.98 cm-1. Natural isotopic mass."
+
+lennard_jones:
+  sigma_angstrom: 3.353
+  epsilon_over_k: 345.0
+  note: "Svehla/Hirschfelder (viscosity-based); polar species — LJ approximation"

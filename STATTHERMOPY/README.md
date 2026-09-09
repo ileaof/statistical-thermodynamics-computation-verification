@@ -19,7 +19,7 @@ calculation itself.
 - Ideal-gas mixtures (mole or mass fractions) with a per-component contribution breakdown and
   the entropy of mixing, plus a **predefined-fluid** registry — select **Air** (standard dry
   N₂/O₂/Ar/CO₂ with optional water vapour) or build any custom composition.
-- Molecular database of 22 species (easily extensible via YAML).
+- Molecular database of 30 species (easily extensible via YAML).
 - CLI scientific terminal, property-vs-T plots, and export to CSV/JSON/YAML/Excel/LaTeX.
 - **Statistical transport properties** — first-principles transport & thermophysical coefficients
   of a pure gas from the Chapman–Enskog first-order solution of the Boltzmann equation with the
@@ -43,8 +43,10 @@ calculation itself.
   [docs/HUMID_AIR.md](docs/HUMID_AIR.md) for the critical analysis of liquid-phase statistical
   models (SAFT, perturbation theory, integral equations, …).
 - **Qt GUI** (optional, PySide6) with Properties / Plot / Transport / Humid Air / Thermodynamic Comparisons / Validate tabs and light/dark theming.
-- **Automatic validation** against embedded NIST/JANAF reference data (Cp° and S° for all 22
-  species in the database; 20 from NIST WebBook Shomate, C2H6/C3H8 from NASA Glenn polynomials).
+- **Automatic validation** against embedded NIST/JANAF reference data (Cp° and S° for all 30
+  species in the database; 25 from NIST WebBook Shomate, C2H6/C3H8/C6H6 from NASA Glenn
+  polynomials, I2 from the gas-phase Shomate fit above its sublimation point, CH3CCl3 from
+  Burcat/Ruscic NASA-7 polynomials).
 - **Performance backends** — pluggable NumPy / Numba / OpenMP / CUDA execution with the same
   physics and API; Numba `@njit` kernels accelerate the quantum rotational J-sum and the
   temperature-batched property grid (CUDA auto-falls back to CPU without an NVIDIA GPU).
@@ -90,7 +92,7 @@ statistical mechanics):
 from statthermopy.validation import validate, list_references
 
 print(list_references())          # ['AR', 'C2H2', 'C2H4', 'C2H6', 'C3H8', 'CH4', 'CL2', 'CO', ...]
-                                  # 22 species: the full molecular database
+                                  # 30 species: the full molecular database
 r = validate("N2", "Cp")
 print(r.mean_abs_error_percent)   # ~0.38 % (rigid-rotor / harmonic-oscillator)
 ```

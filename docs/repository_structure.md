@@ -135,7 +135,7 @@ STATTHERMOPY/
 │   ├── partition.py  thermodynamics.py  mixture.py  constants.py  units.py
 │   ├── core/          Molecule, Geometry, State, Contribution
 │   ├── modes/         translational · rotational · vibrational · electronic
-│   ├── database/      registry + data/*.yaml  (22 species)
+│   ├── database/      registry + data/*.yaml  (30 species)
 │   ├── validation/    reference + data/*.yaml  (NIST/JANAF Cp°, S°)
 │   ├── backend/       executor + numpy / numba / openmp / cuda
 │   ├── io/            exporters (CSV / JSON / YAML / Excel / LaTeX)

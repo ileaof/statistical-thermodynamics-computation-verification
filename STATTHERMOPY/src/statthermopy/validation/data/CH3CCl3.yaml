@@ -1,0 +1,8 @@
+species: CH3CCl3
+source: "Burcat & Ruscic, 'Third Millennium Ideal Gas and Condensed Phase Thermochemical Database', NASA-7 polynomial for CH3CCl3(g) (T11/03, B3LYP-G3/ATcT; respecth.elte.hu), evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear octatomic (C3v symmetric top) with a hindered methyl rotor. Rigid-rotor/harmonic-oscillator/hindered-rotor model agrees within a few percent over this range; deviations grow toward high T due to neglected anharmonicity.
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [92.4096, 107.2725, 127.6033, 140.3633, 148.9615, 161.1459, 168.2053]
+S:  [320.3993, 349.7229, 397.3940, 435.9835, 468.2846, 531.1936, 578.6190]

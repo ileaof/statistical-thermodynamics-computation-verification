@@ -12,12 +12,13 @@ from statthermopy.core.molecule import Geometry
 
 EXPECTED = [
     "HE", "NE", "AR", "KR", "XE",
-    "H2", "N2", "O2", "CL2", "CO", "NO",
+    "H2", "N2", "O2", "CL2", "I2", "HCL", "HBR", "HI", "CO", "NO",
     "H2O", "CO2", "NH3", "CH4", "SO2", "H2S", "N2O", "C2H2", "C2H4", "C2H6", "C3H8",
+    "CCL4", "CFCL3", "CH3CCL3", "C6H6",
 ]
 
 
-def test_all_22_molecules_present():
+def test_all_molecules_present():
     names = set(list_molecules())
     for n in EXPECTED:
         assert n in names, f"missing {n}"
@@ -61,6 +62,20 @@ def test_vibrational_oscillator_counts():
     assert get("C3H8").n_vibrational_modes == 25
     assert get("C3H8").n_internal_rotors == 2
     assert get("C3H8").n_vibrational_modes + get("C3H8").n_internal_rotors == 27
+    # I2: 1 = 3N-5; C6H6: 30 = 3N-6 (grouped D6h fundamentals)
+    assert get("I2").n_vibrational_modes == 1
+    assert get("C6H6").n_vibrational_modes == 30
+    # HX halides: 1 = 3N-5
+    assert get("HCl").n_vibrational_modes == 1
+    assert get("HBr").n_vibrational_modes == 1
+    assert get("HI").n_vibrational_modes == 1
+    # CCl4/CFCl3: 9 = 3N-6 (tetratomic spherical/symmetric tops)
+    assert get("CCl4").n_vibrational_modes == 9
+    assert get("CFCl3").n_vibrational_modes == 9
+    # CH3CCl3: 17 harmonic oscillators + 1 hindered rotor = 18 = 3N-6
+    assert get("CH3CCl3").n_vibrational_modes == 17
+    assert get("CH3CCl3").n_internal_rotors == 1
+    assert get("CH3CCl3").n_vibrational_modes + get("CH3CCl3").n_internal_rotors == 18
 
 
 def test_moments_of_inertia_counts():

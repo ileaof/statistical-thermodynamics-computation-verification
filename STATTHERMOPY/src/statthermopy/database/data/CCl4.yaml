@@ -1,0 +1,20 @@
+name: CCl4
+formula: CCl4
+molar_mass_gmol: 153.8227
+geometry: nonlinear
+n_atoms: 5
+symmetry_number: 12
+rotational_temperatures: [0.0821, 0.0821, 0.0821]
+vibrational_modes:
+  - {wavenumber_cm1: 797.0, degeneracy: 3}
+  - {wavenumber_cm1: 460.0, degeneracy: 1}
+  - {wavenumber_cm1: 315.0, degeneracy: 3}
+  - {wavenumber_cm1: 220.0, degeneracy: 2}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Spherical top (Td); Burcat BURCAT_THR (Gurvich 1991/Manion JPCRD 31, 2002). IA=IB=IC=295.3 amu A^2 (theta_rot=0.0821 K, from the Burcat IA*IB*IC product and r(C-Cl)=1.767 A); 9 fundamentals as listed (3N-6=9)."
+
+lennard_jones:
+  sigma_angstrom: 5.947
+  epsilon_over_k: 322.7
+  note: "Poling/Prausnitz/O'Connell"

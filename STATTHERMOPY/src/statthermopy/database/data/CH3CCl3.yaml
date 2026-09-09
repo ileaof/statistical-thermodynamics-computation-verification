@@ -1,0 +1,31 @@
+name: CH3CCl3
+formula: CH3CCl3
+molar_mass_gmol: 133.4033
+geometry: nonlinear
+n_atoms: 8
+symmetry_number: 3
+rotational_temperatures: [0.0664, 0.0664, 0.0811]
+vibrational_modes:
+  - {wavenumber_cm1: 238.0, degeneracy: 1}
+  - {wavenumber_cm1: 282.0, degeneracy: 1}
+  - {wavenumber_cm1: 341.0, degeneracy: 2}
+  - {wavenumber_cm1: 346.0, degeneracy: 1}
+  - {wavenumber_cm1: 525.0, degeneracy: 1}
+  - {wavenumber_cm1: 725.0, degeneracy: 2}
+  - {wavenumber_cm1: 1074.0, degeneracy: 1}
+  - {wavenumber_cm1: 1084.0, degeneracy: 2}
+  - {wavenumber_cm1: 1383.0, degeneracy: 1}
+  - {wavenumber_cm1: 1450.0, degeneracy: 2}
+  - {wavenumber_cm1: 2951.0, degeneracy: 1}
+  - {wavenumber_cm1: 3014.0, degeneracy: 1}
+  - {wavenumber_cm1: 3735.0, degeneracy: 1}
+internal_rotors:
+  - {rotation_constant_cm1: 5.31, barrier_cm1: 1913.0, symmetry: 3, n_minima: 3, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "C3v symmetric top (1,1,1-trichloroethane); Burcat BURCAT_THR T11/03 (Ruscic & Burcat B3LYP-G3, 2004) fundamentals and methyl-top torsion V(3)=1913 cm-1, Ir=3.174 amu A^2 (F=5.31 cm-1). Moments from r(C-C)=1.54 A, r(C-Cl)=1.772 A, r(C-H)=1.096 A: IA=IB=365.5, IC=299.1 amu A^2 (theta_rot=0.0664/0.0811 K); 17 harmonic oscillators + 1 hindered rotor = 18 = 3N-6. Burcat's IA=IB field is inconsistent with its own IC and the geometry; the geometry value is used."
+
+lennard_jones:
+  sigma_angstrom: 5.25
+  epsilon_over_k: 395.3
+  note: "Estimated (Poling: sigma=0.841 Vc^(1/3), eps/k=1.15 Tb); no tabulated LJ found"

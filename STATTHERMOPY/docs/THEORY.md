@@ -325,9 +325,10 @@ algorithm); (b) **reaction equilibrium** with ΔG°(T) = Σ ν_i G_m,i and K(T) 
 ## 8b. Validation against embedded NIST/JANAF reference data
 
 StatThermoPy ships **curated reference tables** of molar Cp° and absolute molar S° (J/mol/K,
-standard state 1 bar) for all 22 species in the molecular database — the monoatomic and diatomic
-gases (Ar, He, Ne, Kr, Xe, H2, N2, O2, Cl2, NO, CO), the triatomics (H2O, CO2, N2O, SO2, H2S),
-and the larger polyatomics (NH3, CH4, C2H2, C2H4, C2H6, C3H8) — used solely by the optional
+standard state 1 bar) for all 30 species in the molecular database — the monoatomic and diatomic
+gases (Ar, He, Ne, Kr, Xe, H2, N2, O2, Cl2, I2, HCl, HBr, HI, NO, CO), the triatomics
+(H2O, CO2, N2O, SO2, H2S), and the larger polyatomics (NH3, CH4, C2H2, C2H4, C2H6, C3H8, CCl4,
+CFCl3, CH3CCl3, C6H6) — used solely by the optional
 validation layer (`statthermopy.validation.validate`) for cross-checking the first-principles
 engine.
 
@@ -335,11 +336,14 @@ engine.
 No empirical correlation coefficients (NASA/Shomate/JANAF polynomials) live in the package, so
 the calculation core (§1–7) remains pure statistical mechanics. The tabulated values were
 produced by evaluating the NIST Chemistry WebBook Shomate equations for each species at the grid
-temperatures (the Shomate coefficients themselves are not shipped). The two species for which
-NIST WebBook publishes no Shomate fit (C2H6 ethane, C3H8 propane) use the NASA Glenn
-7-coefficient polynomials (McBride, Zehe & Gordon, NASA/TP-2002-211556) instead, evaluated at the
-same grid; again only the values ship, not the coefficients. Each YAML file under
-`statthermopy.validation.data` cites its source and is refinable.
+temperatures (the Shomate coefficients themselves are not shipped). I2's gas-phase Shomate fit
+covers 457.666–2000 K (above the 1 atm sublimation point), so its grid starts at 500 K. The
+species for which NIST WebBook publishes no Shomate fit (C2H6 ethane, C3H8 propane, C6H6
+benzene) use the NASA Glenn 7-coefficient polynomials (McBride, Zehe & Gordon,
+NASA/TP-2002-211556) instead, evaluated at the same grid; CH3CCl3 uses the Burcat & Ruscic
+NASA-7 polynomial (T11/03, respecth.elte.hu) for the same reason; again only the values ship, not the
+coefficients. Each YAML file under `statthermopy.validation.data` cites its source and is
+refinable.
 
 **Why Cp and S compare directly.** Cp is pressure-independent for an ideal gas, and S° is an
 absolute (third-law) quantity, so both match the engine's molar output without a reference-state
@@ -352,9 +356,10 @@ translational entropy carries the pressure dependence (ln(kT/P)).
 up to a few percent at high temperature — neglected anharmonicity makes the engine
 *underestimate* Cp at 2000 K (≈4% for H2, the worst case in the set). The validation tolerance is
 5% mean absolute error. Open-shell species (O2 ³Σ_g⁻, NO ²Π) include their low-lying electronic
-terms, which the engine reproduces. Phase 2 covers the core subset above; extending to all 22
+terms, which the engine reproduces. Phase 2 covers the core subset above; extending to all 30
 species is deferred (some, e.g. C2H6/C3H8/SO2/H2S, carry approximate, refinable spectroscopic
-constants).
+constants; I2's very soft 214.5 cm⁻¹ bond makes its anharmonicity the largest Cp deviation
+in the set, ≈4%).
 
 ---
 

@@ -1,0 +1,8 @@
+species: CCl4
+source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for CCl4(g) (Chase 1998, JANAF), evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
+pressure: 100000.0
+notes: >
+  Nonlinear tetratomic (spherical top, Td). Rigid-rotor/harmonic-oscillator model agrees within a few percent over this range; deviations grow toward high T due to neglected anharmonicity.
+T:  [298.1500, 400.0000, 600.0000, 800.0000, 1000.0000, 1500.0000, 2000.0000]
+Cp: [82.6700, 92.6171, 99.9094, 102.7929, 104.3516, 106.3315, 107.2703]
+S:  [309.6468, 335.5378, 374.7439, 403.9308, 427.0505, 469.7922, 500.5256]

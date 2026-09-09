@@ -1,0 +1,18 @@
+name: I2
+formula: I2
+molar_mass_gmol: 253.8094
+geometry: linear
+n_atoms: 2
+symmetry_number: 2
+# theta_rot = hcB/k with B = 0.03737 cm-1 (Herzberg) -> 0.0537 K
+rotational_temperatures: [0.0537]
+vibrational_modes:
+  - {wavenumber_cm1: 214.5, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCDB. Ground X1Sigma_g+; B=0.03737 cm-1 (theta_rot=0.0537 K), omega_e=214.50 cm-1. Low-lying excited states (B3Pi, ~20,000 cm-1) neglected — ground electronic state only, as for Cl2."
+
+lennard_jones:
+  sigma_angstrom: 5.160
+  epsilon_over_k: 472.0
+  note: "Svehla/Hirschfelder (viscosity-based)"

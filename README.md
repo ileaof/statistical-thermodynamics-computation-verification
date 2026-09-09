@@ -344,7 +344,7 @@ engine behind the book's statistical-thermodynamics chapters.
 It provides `U, H, S, A, G, Cv, Cp, γ, μ` (molar and massic) and the total
 partition function for monoatomic through polyatomic gases and ideal-gas
 mixtures, from translational / rotational / vibrational / electronic modes; a
-22-species YAML database; automatic validation against embedded NIST/JANAF
+30-species YAML database; automatic validation against embedded NIST/JANAF
 references; a scientific CLI; an optional Qt (PySide6) GUI; property-vs-T plots
 and CSV/JSON/YAML/Excel/LaTeX export; and pluggable NumPy / Numba / OpenMP / CUDA
 backends (same physics, 100×+ speedups). 268 tests, ~96 % coverage.

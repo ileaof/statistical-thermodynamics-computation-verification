@@ -1,0 +1,17 @@
+name: HCl
+formula: HCl
+molar_mass_gmol: 36.4609
+geometry: linear
+n_atoms: 2
+symmetry_number: 1
+rotational_temperatures: [15.243]
+vibrational_modes:
+  - {wavenumber_cm1: 2990.95, degeneracy: 1}
+electronic_levels:
+  - {energy_cm1: 0.0, degeneracy: 1}
+references: "Herzberg; NIST CCCBDB. Ground X1Sigma+; Be=10.5934 cm-1 (theta_rot=15.243 K), we=2990.95 cm-1. Natural isotopic mass."
+
+lennard_jones:
+  sigma_angstrom: 3.339
+  epsilon_over_k: 344.7
+  note: "Svehla/Hirschfelder (viscosity-based); polar species — LJ approximation"
