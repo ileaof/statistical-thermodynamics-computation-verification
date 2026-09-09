@@ -1,0 +1,2273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StatThermoPy — Manual do Usuário</title>
+<meta name="description" content="Documentação completa do StatThermoPy: termodinâmica estatística a partir da função de partição molecular, sem correlações empíricas.">
+<meta name="author" content="I. L. Ferreira">
+<style>
+/* ============================================================================
+   StatThermoPy — Help.html
+   Folha de estilo incorporada. Sem dependências externas: funciona offline.
+   ========================================================================= */
+
+:root{
+  --bg:            #fbfaf7;
+  --surface:       #ffffff;
+  --surface-alt:   #f4f2ed;
+  --border:        #ddd8ce;
+  --border-strong: #c6bfb1;
+  --text:          #23201b;
+  --text-soft:     #5c564c;
+  --text-faint:    #857e72;
+  --accent:        #1f4e6b;
+  --accent-soft:   #e7eff4;
+  --accent-line:   #2f7096;
+  --note:          #1f5f4e;
+  --note-bg:       #e8f3ef;
+  --warn:          #8a5209;
+  --warn-bg:       #fdf1de;
+  --eq-bg:         #f6f4ef;
+  /* código embutido na linha de texto (permanece claro, para não quebrar a leitura) */
+  --code-bg:       #f7f5f0;
+  --code-text:     #2b2620;
+  /* telas de terminal: fundo preto e texto claro */
+  --term-bg:       #0d1117;
+  --term-head:     #1b212b;
+  --term-border:   #2c333d;
+  --term-text:     #e8ecf2;
+  --term-out:      #cdd6e0;
+  --term-muted:    #939eae;
+  --term-prompt:   #6fd39a;
+  --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sidebar-w: 19rem;
+  --measure: 46rem;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html{ scroll-behavior:smooth; scroll-padding-top:1.5rem; }
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.65;
+  -webkit-text-size-adjust:100%;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.layout{ display:flex; align-items:flex-start; }
+
+.sidebar{
+  width:var(--sidebar-w);
+  flex:0 0 var(--sidebar-w);
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  background:var(--surface-alt);
+  border-right:1px solid var(--border);
+  padding:1.75rem 1.25rem 3rem;
+}
+
+.sidebar .brand{
+  font-family:var(--serif);
+  font-size:1.3rem;
+  font-weight:700;
+  letter-spacing:.01em;
+  color:var(--accent);
+  margin:0 0 .15rem;
+  line-height:1.2;
+}
+.sidebar .brand-sub{
+  font-size:.78rem;
+  color:var(--text-faint);
+  margin:0 0 1.25rem;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+
+.toc-title{
+  font-size:.72rem;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  color:var(--text-faint);
+  font-weight:700;
+  margin:0 0 .5rem;
+}
+
+.sidebar nav ol{ list-style:none; margin:0; padding:0; counter-reset:toc; }
+.sidebar nav li{ margin:0; }
+.sidebar nav a{
+  display:block;
+  padding:.34rem .55rem .34rem 2.1rem;
+  text-indent:-1.55rem;
+  color:var(--text-soft);
+  text-decoration:none;
+  font-size:.875rem;
+  border-radius:5px;
+  border-left:2px solid transparent;
+  transition:background .12s, color .12s, border-color .12s;
+}
+.sidebar nav li{ counter-increment:toc; }
+.sidebar nav a::before{
+  content:counter(toc) ".";
+  color:var(--text-faint);
+  font-variant-numeric:tabular-nums;
+  margin-right:.5rem;
+  font-size:.8rem;
+}
+.sidebar nav a:hover{ background:var(--accent-soft); color:var(--accent); }
+.sidebar nav a:focus-visible{ outline:2px solid var(--accent-line); outline-offset:1px; }
+.sidebar nav a.active{
+  background:var(--accent-soft);
+  color:var(--accent);
+  font-weight:600;
+  border-left-color:var(--accent-line);
+}
+
+.content{
+  flex:1 1 auto;
+  min-width:0;
+  padding:2.5rem clamp(1rem, 4vw, 3.5rem) 5rem;
+}
+.content > *{ max-width:var(--measure); }
+.content > .wide{ max-width:none; }
+
+/* -------------------------------------------------------- nav toggle (mobile) */
+
+.navbar{
+  display:none;
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:.6rem 1rem;
+  align-items:center;
+  gap:.75rem;
+}
+.navbar .brand{ font-family:var(--serif); font-weight:700; color:var(--accent); font-size:1.05rem; }
+.nav-toggle{
+  font:inherit;
+  font-size:.85rem;
+  background:var(--surface-alt);
+  color:var(--text);
+  border:1px solid var(--border-strong);
+  border-radius:6px;
+  padding:.35rem .7rem;
+  cursor:pointer;
+}
+.nav-toggle:hover{ background:var(--accent-soft); border-color:var(--accent-line); }
+
+/* ---------------------------------------------------------------- headings */
+
+h1,h2,h3,h4{ font-family:var(--serif); color:var(--text); line-height:1.25; }
+
+h1{
+  font-size:clamp(1.9rem, 4.2vw, 2.6rem);
+  margin:0 0 .4rem;
+  letter-spacing:-.01em;
+}
+.subtitle{
+  font-size:1.08rem;
+  color:var(--text-soft);
+  margin:0 0 1.5rem;
+  font-family:var(--serif);
+  font-style:italic;
+}
+
+h2{
+  font-size:1.55rem;
+  margin:3.2rem 0 .9rem;
+  padding-bottom:.35rem;
+  border-bottom:2px solid var(--border);
+  scroll-margin-top:1.5rem;
+}
+h3{ font-size:1.17rem; margin:2rem 0 .6rem; }
+h4{ font-size:1.02rem; margin:1.5rem 0 .45rem; color:var(--accent); }
+
+p{ margin:0 0 1rem; }
+
+a{ color:var(--accent); }
+a:hover{ color:var(--accent-line); }
+
+ul,ol{ margin:0 0 1rem; padding-left:1.4rem; }
+li{ margin:.3rem 0; }
+
+hr{ border:0; border-top:1px solid var(--border); margin:2.5rem 0; }
+
+small{ font-size:.85em; color:var(--text-faint); }
+
+/* -------------------------------------------------------------- hero card */
+
+.hero{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:4px solid var(--accent-line);
+  border-radius:8px;
+  padding:1.25rem 1.4rem;
+  margin:0 0 2rem;
+}
+.hero p:last-child{ margin-bottom:0; }
+
+.badges{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.9rem 0 0; padding:0; list-style:none; }
+.badges li{
+  margin:0;
+  font-size:.76rem;
+  font-family:var(--mono);
+  background:var(--accent-soft);
+  color:var(--accent);
+  border:1px solid #cfe0ea;
+  border-radius:999px;
+  padding:.16rem .6rem;
+  white-space:nowrap;
+}
+
+/* ------------------------------------------------------------- callouts */
+
+.callout{
+  border-radius:7px;
+  padding:.85rem 1.05rem;
+  margin:1.25rem 0;
+  border:1px solid;
+  font-size:.95rem;
+}
+.callout > :first-child{ margin-top:0; }
+.callout > :last-child{ margin-bottom:0; }
+.callout .label{
+  display:block;
+  font-size:.72rem;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:.3rem;
+}
+.callout.note{ background:var(--note-bg); border-color:#bfdcd2; }
+.callout.note .label{ color:var(--note); }
+.callout.warn{ background:var(--warn-bg); border-color:#eccb98; }
+.callout.warn .label{ color:var(--warn); }
+
+.equation{
+  background:var(--eq-bg);
+  border:1px solid var(--border);
+  border-radius:7px;
+  padding:1rem 1.1rem;
+  margin:1.25rem 0;
+  text-align:center;
+  font-family:var(--serif);
+  font-size:1.12rem;
+  overflow-x:auto;
+}
+.equation .caption{
+  display:block;
+  margin-top:.5rem;
+  font-family:var(--sans);
+  font-size:.8rem;
+  font-style:normal;
+  color:var(--text-faint);
+  text-align:center;
+}
+.equation em{ font-style:italic; }
+sub,sup{ font-size:.72em; line-height:0; }
+
+/* ---------------------------------------------------------------- code */
+
+code{
+  font-family:var(--mono);
+  font-size:.875em;
+  background:var(--code-bg);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:.08em .35em;
+  color:var(--code-text);
+  word-break:break-word;
+}
+
+/* --- Telas de terminal: fundo preto, texto claro ------------------------ */
+
+.codeblock{
+  position:relative;
+  margin:1.1rem 0 1.4rem;
+  background:var(--term-bg);
+  border:1px solid var(--term-border);
+  border-radius:7px;
+  overflow:hidden;
+  box-shadow:0 1px 3px rgba(18,21,26,.16);
+}
+.codeblock .codehead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.75rem;
+  padding:.35rem .5rem .35rem .85rem;
+  background:var(--term-head);
+  border-bottom:1px solid var(--term-border);
+}
+.codeblock .codelang{
+  font-family:var(--mono);
+  font-size:.7rem;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  color:var(--term-muted);
+}
+.codeblock pre{
+  margin:0;
+  padding:.85rem 1rem;
+  overflow-x:auto;
+  font-family:var(--mono);
+  font-size:.83rem;
+  line-height:1.55;
+  color:var(--term-text);
+  white-space:pre;
+  tab-size:2;
+}
+.codeblock pre code{
+  background:none; border:0; padding:0; font-size:inherit;
+  color:inherit; word-break:normal;
+}
+
+/* Barra de rolagem discreta dentro do terminal */
+.codeblock pre::-webkit-scrollbar,
+.output pre::-webkit-scrollbar{ height:9px; }
+.codeblock pre::-webkit-scrollbar-track,
+.output pre::-webkit-scrollbar-track{ background:var(--term-head); }
+.codeblock pre::-webkit-scrollbar-thumb,
+.output pre::-webkit-scrollbar-thumb{ background:#3a434f; border-radius:5px; }
+.codeblock pre::-webkit-scrollbar-thumb:hover,
+.output pre::-webkit-scrollbar-thumb:hover{ background:#4d5866; }
+.codeblock pre, .output pre{ scrollbar-width:thin; scrollbar-color:#3a434f var(--term-head); }
+
+.copy-btn{
+  font:inherit;
+  font-size:.74rem;
+  font-family:var(--sans);
+  background:#2a313b;
+  color:#c3ccd8;
+  border:1px solid #3d4653;
+  border-radius:5px;
+  padding:.22rem .6rem;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .12s, color .12s, border-color .12s;
+}
+.copy-btn:hover{ background:#39424f; color:#fff; border-color:#5b6675; }
+.copy-btn:focus-visible{ outline:2px solid var(--term-prompt); outline-offset:1px; }
+.copy-btn.copied{ background:#1f4235; color:#8fe0b4; border-color:#2f6350; }
+
+/* Bloco de saída do programa (não copiável, apenas ilustrativo) */
+.output{
+  margin:1.1rem 0 1.4rem;
+  background:var(--term-bg);
+  border:1px solid var(--term-border);
+  border-left:3px solid var(--term-prompt);
+  border-radius:7px;
+  overflow:hidden;
+  box-shadow:0 1px 3px rgba(18,21,26,.16);
+}
+.output .outhead{
+  padding:.32rem .85rem;
+  background:var(--term-head);
+  border-bottom:1px solid var(--term-border);
+  font-size:.7rem;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  color:var(--term-muted);
+  font-family:var(--mono);
+}
+.output pre{
+  margin:0;
+  padding:.8rem 1rem;
+  overflow-x:auto;
+  font-family:var(--mono);
+  font-size:.79rem;
+  line-height:1.5;
+  color:var(--term-out);
+  white-space:pre;
+}
+
+/* --------------------------------------------------------------- tables */
+
+.table-wrap{
+  overflow-x:auto;
+  margin:1.15rem 0 1.5rem;
+  border:1px solid var(--border);
+  border-radius:7px;
+  background:var(--surface);
+  -webkit-overflow-scrolling:touch;
+}
+table{
+  border-collapse:collapse;
+  width:100%;
+  min-width:32rem;
+  font-size:.875rem;
+}
+caption{
+  caption-side:top;
+  text-align:left;
+  padding:.6rem .9rem .5rem;
+  font-size:.8rem;
+  color:var(--text-faint);
+  border-bottom:1px solid var(--border);
+  background:var(--surface-alt);
+}
+th,td{
+  text-align:left;
+  padding:.5rem .8rem;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+thead th{
+  background:var(--surface-alt);
+  font-weight:700;
+  font-size:.79rem;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:var(--text-soft);
+  white-space:nowrap;
+}
+tbody tr:last-child td{ border-bottom:0; }
+tbody tr:nth-child(even){ background:#fcfbf8; }
+td code, th code{ white-space:nowrap; }
+td.num{ text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:.83em; }
+
+/* --------------------------------------------------------------- figures */
+
+figure{ margin:1.5rem 0; }
+figure img{
+  display:block;
+  max-width:100%;
+  height:auto;
+  border:1px solid var(--border);
+  border-radius:7px;
+  background:var(--surface);
+}
+figcaption{
+  margin-top:.5rem;
+  font-size:.82rem;
+  color:var(--text-faint);
+  line-height:1.5;
+}
+.figgrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(17rem, 1fr));
+  gap:1.25rem;
+  margin:1.5rem 0;
+}
+.figgrid figure{ margin:0; }
+
+/* ------------------------------------------------------------ back to top */
+
+.backtotop{
+  display:block;
+  text-align:right;
+  margin:1.1rem 0 0;
+  font-size:.8rem;
+}
+.backtotop a{
+  color:var(--text-faint);
+  text-decoration:none;
+  border:1px solid var(--border);
+  border-radius:5px;
+  padding:.18rem .6rem;
+  background:var(--surface);
+}
+.backtotop a:hover{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+
+/* --------------------------------------------------------------- footer */
+
+.docfooter{
+  margin-top:3.5rem;
+  padding-top:1.25rem;
+  border-top:1px solid var(--border);
+  font-size:.85rem;
+  color:var(--text-faint);
+}
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 62rem){
+  .layout{ display:block; }
+  .navbar{ display:flex; }
+  .sidebar{
+    display:none;
+    position:static;
+    width:auto;
+    height:auto;
+    border-right:0;
+    border-bottom:1px solid var(--border);
+  }
+  .sidebar.open{ display:block; }
+  .sidebar .brand, .sidebar .brand-sub{ display:none; }
+  .content{ padding:1.75rem 1.1rem 4rem; }
+}
+
+@media (max-width: 34rem){
+  body{ font-size:15px; }
+  .codeblock pre{ font-size:.76rem; }
+  .output pre{ font-size:.72rem; }
+}
+
+/* --------------------------------------------------------------- print */
+
+@media print{
+  :root{ --measure:none; }
+  body{ background:#fff; font-size:10.5pt; }
+  .sidebar, .navbar, .copy-btn, .backtotop, .nav-toggle{ display:none !important; }
+  .content{ padding:0; }
+  .content > *{ max-width:none; }
+  a{ color:#000; text-decoration:none; }
+  .content a[href^="http"]::after{ content:" (" attr(href) ")"; font-size:.8em; color:#555; }
+  h2{ page-break-after:avoid; break-after:avoid; margin-top:1.6rem; }
+  h3,h4{ page-break-after:avoid; break-after:avoid; }
+  .codeblock, .output, .table-wrap, figure, .callout, .equation{
+    page-break-inside:avoid; break-inside:avoid;
+  }
+  .codeblock pre, .output pre{ white-space:pre-wrap; word-wrap:break-word; }
+  .hero{ border-left-width:2px; }
+  table{ min-width:0; }
+
+  /* Na impressão as telas de terminal voltam ao claro: economiza tinta e
+     sobrevive a navegadores que descartam fundos por padrão. */
+  .codeblock, .output{
+    background:#fff; border-color:#999; box-shadow:none;
+  }
+  .output{ border-left:2px solid #999; }
+  .codeblock .codehead, .output .outhead{
+    background:#f2f2f2; border-bottom:1px solid #ccc;
+  }
+  .codeblock .codelang, .output .outhead{ color:#555; }
+  .codeblock pre, .codeblock pre code, .output pre{ color:#000; }
+}
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="sidebar">☰ Sumário</button>
+  <span class="brand">StatThermoPy</span>
+</div>
+
+<div class="layout">
+
+<!-- ===================================================== NAVEGAÇÃO LATERAL -->
+<aside class="sidebar" id="sidebar">
+  <p class="brand">StatThermoPy</p>
+  <p class="brand-sub">Manual do Usuário</p>
+  <p class="toc-title">Sumário</p>
+  <nav aria-label="Sumário do documento">
+    <ol>
+      <li><a href="#apresentacao">Apresentação</a></li>
+      <li><a href="#visao-geral">Visão geral</a></li>
+      <li><a href="#recursos">Principais recursos</a></li>
+      <li><a href="#instalacao">Instalação e dependências</a></li>
+      <li><a href="#inicio-rapido">Início rápido</a></li>
+      <li><a href="#especies">Espécies e fluidos disponíveis</a></li>
+      <li><a href="#termodinamica">Propriedades termodinâmicas</a></li>
+      <li><a href="#transporte">Propriedades de transporte</a></li>
+      <li><a href="#ar-umido">Ar úmido</a></li>
+      <li><a href="#gui">Interface gráfica</a></li>
+      <li><a href="#cli">Uso da CLI</a></li>
+      <li><a href="#exportacao">Exportação de resultados</a></li>
+      <li><a href="#validacao">Validação</a></li>
+      <li><a href="#problemas">Solução de problemas</a></li>
+      <li><a href="#licenca">Licença, autoria e citação</a></li>
+    </ol>
+  </nav>
+</aside>
+
+<!-- ============================================================= CONTEÚDO -->
+<main class="content" id="top">
+
+<!-- ------------------------------------------------------- 1. APRESENTAÇÃO -->
+<h1 id="apresentacao">StatThermoPy</h1>
+<p class="subtitle">Termodinâmica estatística em Python — propriedades termodinâmicas
+calculadas exclusivamente a partir da função de partição molecular.</p>
+
+<div class="hero">
+  <p><strong>StatThermoPy</strong> é um pacote Python que calcula propriedades termodinâmicas de
+  gases <em>exclusivamente a partir da Mecânica Estatística</em>, por meio da função de partição
+  molecular — <strong>sem nenhuma correlação empírica de propriedades</strong> (polinômios NASA,
+  JANAF, Shomate, CoolProp, REFPROP). Dados empíricos de referência são usados apenas para
+  validação <em>opcional</em>, nunca para o cálculo em si.</p>
+  <ul class="badges">
+    <li>versão 0.1.0</li>
+    <li>Python ≥ 3.11</li>
+    <li>licença MIT</li>
+    <li>30 espécies</li>
+    <li>CLI + GUI + API</li>
+  </ul>
+</div>
+
+<div class="equation">
+  <em>Q</em> = <em>Q</em><sub>t</sub> · <em>Q</em><sub>r</sub> · <em>Q</em><sub>v</sub> · <em>Q</em><sub>e</sub>
+  <span class="caption">Função de partição molecular: fatores translacional, rotacional,
+  vibracional e eletrônico. Toda propriedade reportada deriva desta única grandeza.</span>
+</div>
+
+<p>Este documento é autônomo: funciona offline, sem dependências externas, e cobre desde a
+instalação até a interpretação dos resultados. Todos os comandos aqui apresentados foram
+conferidos contra a implementação atual da CLI
+(<code>src/statthermopy/cli/app.py</code>).</p>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- --------------------------------------------------------- 2. VISÃO GERAL -->
+<h2 id="visao-geral">2. Visão geral</h2>
+
+<p>O núcleo do StatThermoPy avalia a função de partição molecular <em>Q</em> de um gás ideal a
+partir de constantes espectroscópicas (massa molar, geometria, número de simetria, temperaturas
+rotacionais, números de onda vibracionais, níveis eletrônicos). Dessa função — e apenas dela —
+saem, por derivação analítica, todas as propriedades termodinâmicas: <em>U</em>, <em>H</em>,
+<em>S</em>, <em>A</em>, <em>G</em>, <em>C<sub>v</sub></em>, <em>C<sub>p</sub></em>, γ e μ, nas
+bases molar e mássica.</p>
+
+<p>Sobre esse núcleo há três camadas construídas com a mesma disciplina de primeiros
+princípios:</p>
+
+<ul>
+  <li><strong>Misturas de gases ideais</strong> — frações molares ou mássicas, com desagregação
+  por componente e entropia de mistura, além de um registro de <em>fluidos predefinidos</em>.</li>
+  <li><strong>Propriedades de transporte</strong> — solução de Chapman–Enskog de primeira ordem
+  da equação de Boltzmann com potencial de par Lennard-Jones 12-6.</li>
+  <li><strong>Ar úmido estatístico</strong> — solubilidade máxima de vapor d'água a partir do
+  equilíbrio líquido–vapor <em>μ</em><sub>v</sub> = <em>μ</em><sub>l</sub>, sem correlação de
+  Antoine/Magnus/Tetens.</li>
+</ul>
+
+<div class="callout note">
+  <span class="label">Princípio de projeto</span>
+  Nenhum coeficiente de correlação empírica reside no núcleo de cálculo. As tabelas NIST/JANAF
+  embarcadas contêm apenas <em>valores</em> de referência, usados pela camada opcional de
+  validação — jamais pelo motor de cálculo.
+</div>
+
+<p>O pacote é acessível por três vias equivalentes, todas apoiadas na mesma API pública: um
+<strong>terminal científico interativo</strong> (REPL), um <strong>modo de execução direta</strong>
+para scripts, e uma <strong>interface gráfica Qt</strong> opcional. Nenhuma delas acrescenta
+física: são camadas de apresentação.</p>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- --------------------------------------------------------- 3. RECURSOS -->
+<h2 id="recursos">3. Principais recursos</h2>
+
+<h3>3.1 Motor termodinâmico</h3>
+<ul>
+  <li>Gases ideais monoatômicos, diatômicos, poliatômicos lineares e não lineares.</li>
+  <li>Contribuições translacional, rotacional, vibracional (oscilador harmônico quântico) e
+  eletrônica, além de <strong>rotação interna impedida</strong> (rotor 1-D por autovalores de
+  Mathieu) para torções de ligação simples, como os topos metila do etano e do propano.</li>
+  <li>Bases molar e mássica para <em>U</em>, <em>H</em>, <em>S</em>, <em>A</em>, <em>G</em>,
+  <em>C<sub>v</sub></em>, <em>C<sub>p</sub></em>, γ, μ, mais a função de partição total.</li>
+  <li>Misturas de gases ideais (frações molares ou mássicas) com desagregação da contribuição
+  por componente e entropia de mistura, mais um registro de <strong>fluidos predefinidos</strong>
+  — selecione <strong>Air</strong> (ar seco padrão N₂/O₂/Ar/CO₂, com vapor d'água opcional) ou
+  monte qualquer composição personalizada.</li>
+  <li>Banco de dados molecular com <strong>30 espécies</strong>, facilmente extensível via YAML.</li>
+</ul>
+
+<h3>3.2 Transporte estatístico</h3>
+<ul>
+  <li>Coeficientes de transporte e termofísicos de um gás puro pela solução de Chapman–Enskog de
+  primeira ordem da equação de Boltzmann com potencial Lennard-Jones: viscosidade dinâmica e
+  cinemática, condutividade térmica, difusividade térmica, difusão binária e autodifusão,
+  números de Prandtl/Schmidt/Lewis, fator de compressibilidade, velocidade do som, coeficiente
+  de expansão, compressibilidade isotérmica e coeficiente de Joule–Thomson.</li>
+  <li>As capacidades caloríficas e γ vêm do motor de função de partição; os únicos insumos
+  moleculares são σ e ε de Lennard-Jones (sem REFPROP/CoolProp).</li>
+  <li>Curvas vs <em>T</em> / vs <em>P</em>, mapas 2-D <em>T</em>×<em>P</em>, exportação
+  CSV/Excel/Tecplot/PNG/PDF.</li>
+</ul>
+
+<h3>3.3 Ar úmido estatístico</h3>
+<ul>
+  <li>Solubilidade máxima de vapor d'água no ar em função de temperatura e pressão a partir do
+  equilíbrio líquido–vapor <em>μ</em><sub>v</sub> = <em>μ</em><sub>l</sub>: a energia de Gibbs do
+  vapor vem puramente da função de partição da água (sua entropia absoluta reproduz
+  <em>S</em>° do vapor com desvio &lt; 0,1 %) e a do líquido de uma referência plugável
+  (IAPWS-95 ou um modelo transparente de <em>c<sub>p</sub></em> constante), unidas por uma
+  âncora no ponto triplo — <strong>sem correlação de Antoine/Magnus/Tetens</strong>.</li>
+  <li>Prevê <em>P</em><sub>sat</sub> com ≈ 0,1 % perto de condições ambientes (≈ 1,5 % a 100 °C) e
+  o conjunto psicrométrico completo: razão de umidade, umidade absoluta e relativa, ponto de
+  orvalho, bulbo úmido, grau de saturação, densidade do ar úmido, M̄, <em>R</em>, além de
+  <em>h</em>/<em>u</em>/<em>s</em>/<em>g</em>/<em>a</em>/<em>C<sub>p</sub></em>/<em>C<sub>v</sub></em>/γ.</li>
+  <li><strong>Análise gráfica comparativa</strong>: conteúdo de vapor d'água (real vs saturação,
+  com início de condensação) e comparação ar seco vs ar úmido de qualquer propriedade
+  (<em>H</em>, <em>U</em>, <em>S</em>, <em>G</em>, <em>A</em>, <em>C<sub>p</sub></em>,
+  <em>C<sub>v</sub></em>, <em>T<sub>v</sub></em>, <em>T<sub>p</sub></em>) sob restrições
+  isobárica e isocórica, com legenda interativa, tooltips, zoom/pan e exportação
+  PNG/SVG/PDF + CSV/Excel.</li>
+</ul>
+
+<h3>3.4 Interfaces, validação e desempenho</h3>
+<ul>
+  <li><strong>GUI Qt</strong> (opcional, PySide6) com abas Properties / Plot / Transport /
+  Humid Air / Thermodynamic Comparisons / Validate e temas claro/escuro.</li>
+  <li>Terminal científico CLI, gráficos de propriedade vs <em>T</em> e exportação para
+  CSV/JSON/YAML/Excel/LaTeX.</li>
+  <li><strong>Validação automática</strong> contra dados de referência NIST/JANAF embarcados
+  (<em>C<sub>p</sub></em>° e <em>S</em>° para as 30 espécies do banco; 25 pela equação de Shomate
+  do NIST WebBook, C2H6/C3H8/C6H6 por polinômios NASA Glenn, I2 pelo ajuste Shomate em fase
+  gasosa acima do ponto de sublimação, CH3CCl3 por polinômios NASA-7 de Burcat/Ruscic).</li>
+  <li><strong>Backends de desempenho</strong> — execução plugável NumPy / Numba / OpenMP / CUDA
+  com a mesma física e API; kernels <code>@njit</code> aceleram a soma quântica em <em>J</em> e a
+  grade de propriedades em lote de temperatura (CUDA cai automaticamente para CPU sem GPU
+  NVIDIA).</li>
+  <li>Suíte de testes unitários visando cobertura ≥ 95 %.</li>
+</ul>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------------- 4. INSTALAÇÃO -->
+<h2 id="instalacao">4. Instalação e dependências</h2>
+
+<p>StatThermoPy requer <strong>Python 3.11 ou superior</strong>. A instalação em modo
+desenvolvimento (editável) é a recomendada enquanto o pacote está em fase alfa:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>python -m pip install -e ".[dev]"          # núcleo + CLI
+python -m pip install -e ".[dev,gui]"      # ... mais a GUI Qt (PySide6)
+python -m pip install -e ".[dev,accel]"    # ... mais aceleração CPU Numba/OpenMP</code></pre>
+</div>
+
+<h3>4.1 Dependências</h3>
+
+<div class="table-wrap">
+  <table>
+    <caption>Dependências obrigatórias e opcionais, conforme <code>pyproject.toml</code>.</caption>
+    <thead>
+      <tr><th>Grupo</th><th>Pacotes</th><th>Para quê</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><em>obrigatório</em></td><td><code>numpy&gt;=1.26</code>, <code>pyyaml&gt;=6.0</code>, <code>pandas&gt;=2.0</code>, <code>matplotlib&gt;=3.7</code></td><td>Motor de cálculo, banco YAML, tabelas e gráficos.</td></tr>
+      <tr><td><code>excel</code></td><td><code>openpyxl&gt;=3.1</code></td><td>Exportação para planilhas <code>.xlsx</code>.</td></tr>
+      <tr><td><code>gui</code></td><td><code>PySide6&gt;=6.6</code></td><td>Interface gráfica Qt.</td></tr>
+      <tr><td><code>accel</code></td><td><code>numba&gt;=0.60</code></td><td>Backends Numba e OpenMP (CPU).</td></tr>
+      <tr><td><code>cuda</code></td><td><code>numba&gt;=0.60</code></td><td>Backend CUDA (requer GPU NVIDIA; sem ela, cai para CPU).</td></tr>
+      <tr><td><code>humidair</code></td><td><code>iapws&gt;=1.5</code></td><td>Referência IAPWS-95 de alta acurácia para a água líquida no módulo de ar úmido. Sem ela, o módulo usa um líquido transparente de <em>c<sub>p</sub></em> constante.</td></tr>
+      <tr><td><code>dev</code></td><td><code>pytest</code>, <code>pytest-cov</code>, <code>ruff</code>, <code>black</code>, <code>sphinx</code>, <code>openpyxl</code>, <code>PySide6</code>, <code>numba</code>, <code>iapws</code></td><td>Conjunto completo de desenvolvimento: testes, lint, formatação e documentação.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>4.2 Comandos instalados</h3>
+
+<p>A instalação registra dois executáveis de console:</p>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Comando</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><code>statthermopy</code></td><td>CLI: terminal interativo (sem argumentos) ou execução direta por subcomandos.</td></tr>
+      <tr><td><code>statthermopy-gui</code></td><td>Interface gráfica Qt (equivale a <code>python -m statthermopy.gui.app</code>).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout note">
+  <span class="label">Verificação da instalação</span>
+  Execute <code>statthermopy run --gas N2 --T 298.15 --P 101325</code>. Se o relatório de
+  propriedades do N₂ for impresso, o núcleo e a CLI estão operacionais.
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------------ 5. INÍCIO RÁPIDO -->
+<h2 id="inicio-rapido">5. Início rápido</h2>
+
+<h3>5.1 Pela API Python</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">python</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>from statthermopy import Thermodynamics, State
+from statthermopy.database import get
+
+n2 = get("N2")
+st = State(T=298.15, P=101325.0)
+th = Thermodynamics(n2, st)
+print(th.properties())   # relatório molar e mássico</code></pre>
+</div>
+
+<h3>5.2 Pelo terminal interativo</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas N2
+&gt; T = 298.15
+&gt; P = 101325
+&gt; properties</code></pre>
+</div>
+
+<h3>5.3 Por execução direta</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas N2 --T 298.15 --P 101325</code></pre>
+</div>
+
+<p>As três formas produzem o mesmo resultado numérico — mudam apenas a apresentação e a
+ergonomia. A escolha depende do uso: a API para integração em scripts, o terminal interativo
+para exploração, e a execução direta para automação e pipelines.</p>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ---------------------------------------------------------- 6. ESPÉCIES -->
+<h2 id="especies">6. Espécies e fluidos disponíveis</h2>
+
+<p>O banco molecular reúne <strong>30 espécies</strong>. Cada uma é um arquivo YAML em
+<code>src/statthermopy/database/data/</code>, contendo massa molar, geometria, número de simetria,
+temperaturas rotacionais, modos vibracionais, níveis eletrônicos, parâmetros de Lennard-Jones e
+as referências espectroscópicas. Para listar as espécies em tempo de execução:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; list</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  30 gases: AR, C2H2, C2H4, C2H6, C3H8, C6H6, CCL4, CFCL3, CH3CCL3, CH4, CL2, CO,
+  CO2, H2, H2O, H2S, HBR, HCL, HE, HI, I2, KR, N2, N2O, NE, NH3, NO, O2, SO2, XE</pre>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <caption>As 30 espécies do banco molecular, agrupadas por classe estrutural.</caption>
+    <thead><tr><th>Classe</th><th>Espécies</th><th>N.º</th></tr></thead>
+    <tbody>
+      <tr><td>Monoatômicas</td><td><code>He</code>, <code>Ne</code>, <code>Ar</code>, <code>Kr</code>, <code>Xe</code></td><td class="num">5</td></tr>
+      <tr><td>Diatômicas homonucleares</td><td><code>H2</code>, <code>N2</code>, <code>O2</code>, <code>Cl2</code>, <code>I2</code></td><td class="num">5</td></tr>
+      <tr><td>Diatômicas heteronucleares</td><td><code>CO</code>, <code>NO</code>, <code>HCl</code>, <code>HBr</code>, <code>HI</code></td><td class="num">5</td></tr>
+      <tr><td>Triatômicas</td><td><code>H2O</code>, <code>CO2</code>, <code>N2O</code>, <code>SO2</code>, <code>H2S</code></td><td class="num">5</td></tr>
+      <tr><td>Poliatômicas (hidrocarbonetos)</td><td><code>CH4</code>, <code>C2H2</code>, <code>C2H4</code>, <code>C2H6</code>, <code>C3H8</code>, <code>C6H6</code></td><td class="num">6</td></tr>
+      <tr><td>Poliatômicas (halogenadas)</td><td><code>CCl4</code>, <code>CFCl3</code>, <code>CH3CCl3</code></td><td class="num">3</td></tr>
+      <tr><td>Outras poliatômicas</td><td><code>NH3</code></td><td class="num">1</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout note">
+  <span class="label">Nomes são insensíveis a maiúsculas</span>
+  O banco normaliza os nomes internamente: <code>gas N2</code>, <code>gas n2</code> e
+  <code>--gas N2</code> selecionam a mesma espécie. A listagem exibe as chaves em caixa alta
+  (<code>HCL</code>), mas <code>--gas HCl</code> funciona igualmente.
+</div>
+
+<h3>6.1 Fluidos predefinidos</h3>
+
+<p>Além das espécies puras, há um registro de <em>fluidos</em> — composições prontas de mistura.
+Para listar:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; fluids</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  predefined fluids: Air</pre>
+</div>
+
+<p>O fluido <strong>Air</strong> corresponde ao ar seco padrão, com frações molares
+N₂ = 0,7808, O₂ = 0,2095, Ar = 0,0093 e CO₂ = 0,0004. Vapor d'água pode ser acrescentado com
+<code>h2o=&lt;fração molar&gt;</code> no terminal, ou <code>--humidity &lt;fração molar&gt;</code>
+na execução direta; os constituintes secos são reescalados para completar o restante.</p>
+
+<h3>6.2 Estendendo o banco</h3>
+
+<p>Acrescentar uma espécie não requer alterar código: basta depositar um novo arquivo YAML em
+<code>src/statthermopy/database/data/</code> seguindo o mesmo esquema. Os campos essenciais são
+<code>name</code>, <code>formula</code>, <code>molar_mass_gmol</code>, <code>geometry</code>,
+<code>n_atoms</code>, <code>symmetry_number</code>, <code>rotational_temperatures</code>,
+<code>vibrational_modes</code>, <code>electronic_levels</code>, <code>references</code> e o bloco
+opcional <code>lennard_jones</code> (necessário para as propriedades de transporte).</p>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------------ 7. TERMODINÂMICA -->
+<h2 id="termodinamica">7. Propriedades termodinâmicas</h2>
+
+<p>Todas as propriedades são obtidas por derivação da função de partição. O relatório do comando
+<code>properties</code> traz três blocos: grandezas molares, grandezas mássicas e os fatores da
+função de partição.</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Propriedades reportadas, símbolos internos e unidades SI.</caption>
+    <thead><tr><th>Símbolo</th><th>Grandeza</th><th>Unidade</th></tr></thead>
+    <tbody>
+      <tr><td><code>U_m</code> / <code>U_s</code></td><td>Energia interna</td><td>J/mol · J/kg</td></tr>
+      <tr><td><code>H_m</code> / <code>H_s</code></td><td>Entalpia</td><td>J/mol · J/kg</td></tr>
+      <tr><td><code>S_m</code> / <code>S_s</code></td><td>Entropia absoluta</td><td>J/mol/K · J/kg/K</td></tr>
+      <tr><td><code>A_m</code> / <code>A_s</code></td><td>Energia livre de Helmholtz</td><td>J/mol · J/kg</td></tr>
+      <tr><td><code>G_m</code> / <code>G_s</code></td><td>Energia livre de Gibbs</td><td>J/mol · J/kg</td></tr>
+      <tr><td><code>Cv_m</code> / <code>Cv_s</code></td><td>Capacidade calorífica a volume constante</td><td>J/mol/K · J/kg/K</td></tr>
+      <tr><td><code>Cp_m</code> / <code>Cp_s</code></td><td>Capacidade calorífica a pressão constante</td><td>J/mol/K · J/kg/K</td></tr>
+      <tr><td><code>gamma</code></td><td>Razão de capacidades caloríficas <em>C<sub>p</sub></em>/<em>C<sub>v</sub></em></td><td>—</td></tr>
+      <tr><td><code>mu_m</code></td><td>Potencial químico</td><td>J/mol</td></tr>
+      <tr><td><code>R_specific</code></td><td>Constante específica do gás</td><td>J/kg/K</td></tr>
+      <tr><td><code>Qt, Qr, Qv, Qe, Qtotal</code></td><td>Fatores da função de partição</td><td>—</td></tr>
+      <tr><td><code>S_mixing</code></td><td>Entropia de mistura (somente misturas)</td><td>J/mol/K</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>7.1 Exemplo — nitrogênio em condições ambientes</h3>
+
+<p><strong>Objetivo.</strong> Obter o conjunto completo de propriedades do N₂ nas condições de
+referência (25 °C, 1 atm), incluindo os fatores da função de partição.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas N2 --T 298.15 --P 101325</code></pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <code>--T</code> em kelvin (K), <code>--P</code> em
+pascal (Pa). O padrão opcional <code>--n</code> é a quantidade de matéria em mol (1 mol se
+omitido).</p>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  State: T=298.1500 K  P=101325 Pa  V=2.446540e-02 m^3  n=1 mol  m=0.0280134 kg
+  Molar mass: 28.0134 g/mol
+  --- Molar (per mol) ---
+    U_m     =    6197.714287  J/mol
+    H_m     =    8676.671317  J/mol
+    S_m     =     191.445830  J/mol/K
+    A_m     =  -50881.859892  J/mol
+    G_m     =  -48402.902862  J/mol
+    Cv_m    =      20.798438  J/mol/K
+    Cp_m    =      29.112901  J/mol/K
+    gamma   =       1.399764  -
+    mu_m    =  -48402.902862  J/mol
+  --- Massic (per kg) ---
+    U_s            =  221241.059176  J/kg
+    H_s            =  309732.889143  J/kg
+    S_s            =    6834.080472  J/kg/K
+    A_s            = -1816340.033412  J/kg
+    G_s            = -1727848.203445  J/kg
+    Cv_s           =     742.446040  J/kg/K
+    Cp_s           =    1039.249092  J/kg/K
+    R_specific     =     296.803052  J/kg/K
+  --- Partition function ---
+    Qt      =   3.509568e+30
+    Qr      =   5.179812e+01
+    Qv      =   1.000011e+00
+    Qe      =   1.000000e+00
+    Qtotal  =   1.817911e+32
+    ln Q   = 74.280411</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> <code>Cp_m</code> ≈ 29,11 J/mol/K é o valor clássico de uma
+diatômica rígida (7<em>R</em>/2 ≈ 29,10) — o modo vibracional está praticamente congelado a
+298 K, o que se confirma em <code>Qv</code> ≈ 1,000011. A entropia absoluta
+<code>S_m</code> ≈ 191,45 J/mol/K reproduz o valor tabelado de terceira lei do N₂. O expoente
+enorme de <code>Qt</code> (10³⁰) reflete a densidade de estados translacionais; o
+<code>ln Q</code> é reportado porque é a grandeza numericamente estável.</p>
+
+<h3>7.2 Exemplo — dióxido de carbono aquecido e comprimido</h3>
+
+<p><strong>Objetivo.</strong> Avaliar quanto os modos vibracionais do CO₂ se ativam a 800 K e
+5 bar.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas CO2 --T 800 --P 500000</code></pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <em>T</em> = 800 K; <em>P</em> = 500 000 Pa = 5 bar.</p>
+
+<div class="output">
+  <div class="outhead">saída (trecho)</div>
+<pre>  State: T=800.0000 K  P=500000 Pa  V=1.330314e-02 m^3  n=1 mol  m=0.0440095 kg
+  Molar mass: 44.0095 g/mol
+  --- Molar (per mol) ---
+    U_m     =   25417.132120  J/mol
+    H_m     =   32068.702214  J/mol
+    S_m     =     243.855343  J/mol/K
+    Cv_m    =      42.860927  J/mol/K
+    Cp_m    =      51.175389  J/mol/K
+    gamma   =       1.193987  -
+  --- Partition function ---
+    Qt      =   1.651616e+31
+    Qr      =   7.087172e+02
+    Qv      =   2.264570e+00
+    Qe      =   1.000000e+00
+    Qtotal  =   2.650744e+34</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> <code>Qv</code> = 2,26 (contra ≈ 1 para o N₂ ambiente)
+mostra os modos de flexão do CO₂ populados. Isso eleva <code>Cp_m</code> a 51,18 J/mol/K, muito
+acima do valor de rotor rígido de uma molécula linear (7<em>R</em>/2 ≈ 29,1), e derruba γ para
+1,194 — os quatro modos vibracionais do CO₂ podem acrescentar até 4<em>R</em> ≈ 33,3 J/mol/K
+quando plenamente excitados. Note que a pressão
+não afeta <em>C<sub>p</sub></em> nem <em>C<sub>v</sub></em> num gás ideal — ela entra apenas em
+<em>S</em>, <em>G</em>, <em>A</em>, μ e no volume.</p>
+
+<h3>7.3 Exemplo — fluido predefinido Air</h3>
+
+<p><strong>Objetivo.</strong> Obter as propriedades do ar seco padrão, com a contribuição de cada
+constituinte e a entropia de mistura.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --fluid Air --T 300 --P 101325</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Mixture (mole): N2=0.7808, O2=0.2095, Ar=0.0093, CO2=0.0004
+  T=300.0000 K  P=101325 Pa  M_avg=28.9660 g/mol  R_specific=287.0420 J/kg/K
+  --- Molar (per mol) ---
+    U_m      =    6215.125805  J/mol
+    H_m      =    8709.464591  J/mol
+    S_m      =     198.843472  J/mol/K
+    A_m      =  -53437.915687  J/mol
+    G_m      =  -50943.576902  J/mol
+    Cv_m     =      20.773071  J/mol/K
+    Cp_m     =      29.087534  J/mol/K
+    gamma    =       1.400252  -
+    mu_m     =  -50943.576902  J/mol
+    S_mixing =       4.717606  J/mol/K
+  --- Massic (per kg) ---
+    Cp_s           =    1004.195341  J/kg/K
+    R_specific     =     287.042027  J/kg/K
+  --- Per-component contribution to molar totals ---
+    species       x_i           U         S             G       Cp
+    N2         0.7808     4869.27   151.229     -38551.97   22.732
+    O2         0.2095     1308.13    45.693     -11877.37    6.146
+    Ar         0.0093       34.94     1.809       -484.55    0.194
+    CO2        0.0004        2.77     0.112        -29.69    0.015</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> <code>M_avg</code> = 28,966 g/mol e
+<code>R_specific</code> = 287,04 J/kg/K reproduzem exatamente os valores clássicos do ar seco —
+uma verificação forte, porque aqui saíram da composição e das massas molares, não de uma tabela.
+<code>Cp_s</code> ≈ 1004 J/kg/K é o valor de manual. A entropia de mistura de 4,72 J/mol/K é a
+penalidade de mistura ideal; ela está incluída em <code>S_m</code>. A tabela por componente
+mostra as parcelas <em>x<sub>i</sub></em>-ponderadas que somam cada total molar.</p>
+
+<p>Para acrescentar vapor d'água à composição, use <code>--humidity</code> com a fração molar
+desejada:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --fluid Air --humidity 0.01 --T 300 --P 101325</code></pre>
+</div>
+
+<h3>7.4 Exemplo — mistura gasosa personalizada</h3>
+
+<p><strong>Objetivo.</strong> Avaliar uma mistura de 70 % argônio e 30 % nitrogênio (base molar) a
+400 K e 2 bar.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --mixture Ar:0.7 N2:0.3 --T 400 --P 200000</code></pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> As frações são adimensionais e devem somar 1; a base é
+molar por padrão e pode ser trocada com <code>--basis mass</code>.</p>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Mixture (mole): Ar=0.7000, N2=0.3000
+  T=400.0000 K  P=200000 Pa  M_avg=36.3676 g/mol  R_specific=228.6227 J/kg/K
+  --- Molar (per mol) ---
+    U_m      =    5988.164098  J/mol
+    H_m      =    9313.949146  J/mol
+    S_m      =     172.020336  J/mol/K
+    Cv_m     =      15.003178  J/mol/K
+    Cp_m     =      23.317640  J/mol/K
+    gamma    =       1.554180  -
+    S_mixing =       5.079008  J/mol/K
+  --- Per-component contribution to molar totals ---
+    species       x_i           U         S             G       Cp
+    Ar         0.7000     3492.07   110.710     -38463.68   14.550
+    N2         0.3000     2496.09    61.311     -21030.50    8.767</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> γ = 1,554 fica entre o valor monoatômico (1,667, do Ar) e o
+diatômico (1,400, do N₂), ponderado pela composição — como esperado. <code>Cv_m</code> = 15,003
+J/mol/K é <em>exatamente</em> a média ponderada molar 0,7 × 12,472 + 0,3 × 20,910 = 15,003
+(valores de <em>C<sub>v</sub></em> do Ar e do N₂ a 400 K) — como deve ser numa mistura ideal, em
+que as capacidades caloríficas são aditivas. Já a entropia de mistura (5,08 J/mol/K) é o único
+termo <em>não</em> aditivo: é máxima perto de composições equimolares e cai a zero para um
+componente puro.</p>
+
+<p>No terminal interativo, a mesma mistura é definida com:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; mixture Ar:0.7 N2:0.3
+&gt; T = 400
+&gt; P = 200000
+&gt; properties</code></pre>
+</div>
+
+<h3>7.5 Desagregação por modo</h3>
+
+<p><strong>Objetivo.</strong> Ver quanto cada grau de liberdade contribui para <em>U</em>,
+<em>S</em>, <em>A</em> e <em>C<sub>v</sub></em>. Disponível no terminal interativo pelo comando
+<code>modes</code>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas N2
+&gt; T = 300
+&gt; P = 101325
+&gt; modes</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Partition function factors (T=300.0 K):
+    ln Qt = 70.348510   Qt = 3.564263e+30
+    ln Qr = 3.953540   Qr = 5.211953e+01
+    ln Qv = 0.000012   Qv = 1.000012e+00
+    ln Qe = 0.000000   Qe = 1.000000e+00
+    ln Q  = 74.302062   Q  = 1.857700e+32
+  Per-mode contributions (molar):
+    translational U=   3741.5082  S=    150.4386  A=   -41390.0853  Cv=   12.4717
+    rotational    U=   2494.3388  S=     41.1860  A=    -9861.4674  Cv=    8.3145
+    vibrational   U=      0.3451  S=      0.0013  A=       -0.0305  Cv=    0.0130
+    electronic    U=      0.0000  S=      0.0000  A=       -0.0000  Cv=    0.0000</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A leitura é diretamente a equipartição:
+<em>C<sub>v</sub></em> translacional = 3<em>R</em>/2 = 12,47 J/mol/K e rotacional (linear) =
+<em>R</em> = 8,31 J/mol/K, somando 20,79. A contribuição vibracional (0,013) é desprezível a
+300 K — a temperatura vibracional do N₂ é ≈ 3374 K. A contribuição eletrônica é nula porque o
+estado fundamental do N₂ é um singleto sem níveis baixos acessíveis.</p>
+
+<h3>7.6 Gráficos de propriedade vs temperatura</h3>
+
+<p><strong>Objetivo.</strong> Traçar a variação de uma propriedade ao longo de uma faixa de
+temperatura, salvando um PNG. A sintaxe é
+<code>plot &lt;prop&gt; [Tmin] [Tmax] [npontos] [saida.png]</code>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas N2
+&gt; P = 101325
+&gt; plot Cp_m 200 2000 100 n2_cp.png
+&gt; plot H_m 200 2000 100 n2_enthalpy.png
+&gt; plot S_m 200 2000 100 n2_entropy.png
+&gt; transport mu 300 1500 100 n2_viscosity.png</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  selected: Molecule(name='N2', formula='N2', M=28.0134 g/mol, geometry=linear)
+  saved plot -&gt; n2_cp.png
+  saved plot -&gt; n2_enthalpy.png
+  saved plot -&gt; n2_entropy.png
+  saved plot -&gt; n2_viscosity.png</pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <em>T</em><sub>min</sub> e <em>T</em><sub>max</sub> em
+kelvin; o número de pontos é inteiro. A pressão usada é a definida por <code>P</code>; se
+nenhuma for definida, adota-se 101325 Pa.</p>
+
+<p><strong>Arquivos gerados.</strong> Quatro PNGs a 120 dpi no diretório de trabalho:
+<code>n2_cp.png</code>, <code>n2_enthalpy.png</code>, <code>n2_entropy.png</code> e
+<code>n2_viscosity.png</code>. Se o nome do arquivo for omitido, o padrão é
+<code>&lt;GAS&gt;_&lt;prop&gt;.png</code>.</p>
+
+<p><strong>Como interpretar.</strong> A curva de <em>C<sub>p</sub></em> do N₂ sobe de ≈ 29,1 J/mol/K
+a 200 K para ≈ 35,7 J/mol/K a 2000 K, à medida que o modo vibracional se ativa; a entalpia é
+monotonicamente crescente e a entropia cresce logaritmicamente. A quarta linha usa o comando
+<code>transport</code>, e não <code>plot</code>, porque a viscosidade pertence ao módulo de
+transporte — a sintaxe, porém, é idêntica.</p>
+
+<div class="callout note">
+  <span class="label">Propriedades aceitas por <code>plot</code></span>
+  <code>U_m</code>, <code>H_m</code>, <code>S_m</code>, <code>A_m</code>, <code>G_m</code>,
+  <code>Cv_m</code>, <code>Cp_m</code>, <code>gamma</code>, <code>T_v</code>, <code>T_p</code>,
+  e ainda os fatores da função de partição <code>Qt</code>, <code>Qr</code>, <code>Qv</code>,
+  <code>Qe</code>, <code>Qtotal</code> (estes últimos traçados em escala logarítmica).
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- --------------------------------------------------------- 8. TRANSPORTE -->
+<h2 id="transporte">8. Propriedades de transporte</h2>
+
+<p>Os coeficientes de transporte e termofísicos de um gás puro derivam da solução de
+<strong>Chapman–Enskog</strong> de primeira ordem da equação de Boltzmann com o potencial de par
+<strong>Lennard-Jones 12-6</strong>. O motor permanece de primeiros princípios: as capacidades
+caloríficas e γ vêm da função de partição, e os únicos insumos moleculares são σ (diâmetro de
+colisão) e ε (profundidade do poço), armazenados por espécie como <code>LennardJones</code>.
+Nenhuma base externa de propriedades (REFPROP/CoolProp) é usada.</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>As 13 propriedades de transporte reportadas, com símbolos e unidades SI.</caption>
+    <thead><tr><th>Símbolo</th><th>Grandeza</th><th>Unidade</th></tr></thead>
+    <tbody>
+      <tr><td><code>mu</code></td><td>Viscosidade dinâmica</td><td>Pa·s</td></tr>
+      <tr><td><code>nu</code></td><td>Viscosidade cinemática</td><td>m²/s</td></tr>
+      <tr><td><code>k</code></td><td>Condutividade térmica (Eucken)</td><td>W/m/K</td></tr>
+      <tr><td><code>alpha</code></td><td>Difusividade térmica</td><td>m²/s</td></tr>
+      <tr><td><code>D_self</code></td><td>Coeficiente de autodifusão</td><td>m²/s</td></tr>
+      <tr><td><code>Pr</code></td><td>Número de Prandtl</td><td>—</td></tr>
+      <tr><td><code>Sc</code></td><td>Número de Schmidt</td><td>—</td></tr>
+      <tr><td><code>Le</code></td><td>Número de Lewis</td><td>—</td></tr>
+      <tr><td><code>Z</code></td><td>Fator de compressibilidade</td><td>—</td></tr>
+      <tr><td><code>a</code></td><td>Velocidade do som</td><td>m/s</td></tr>
+      <tr><td><code>beta</code></td><td>Coeficiente de expansão térmica</td><td>1/K</td></tr>
+      <tr><td><code>kappa_T</code></td><td>Compressibilidade isotérmica</td><td>1/Pa</td></tr>
+      <tr><td><code>mu_JT</code></td><td>Coeficiente de Joule–Thomson</td><td>K/Pa</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>8.1 Exemplo — todas as propriedades de transporte do N₂</h3>
+
+<p><strong>Objetivo.</strong> Obter o quadro completo de transporte do nitrogênio a 300 K e
+1 atm.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --gas N2 --T 300 --P 101325</code></pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <code>--T</code> em K, <code>--P</code> em Pa. O
+argumento <code>--gas</code> é obrigatório neste subcomando.</p>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Transport properties — N2 @ T=300.0000 K, P=101325 Pa
+    mu       =    1.76985e-05  Pa·s
+    nu       =    1.55528e-05  m^2/s
+    k        =      0.0249598  W/m/K
+    alpha    =    2.11049e-05  m^2/s
+    D_self   =    2.04408e-05  m^2/s
+    Pr       =       0.736929  -
+    Sc       =       0.760871  -
+    Le       =        1.03249  -
+    Z        =              1  -
+    a        =        353.037  m/s
+    beta     =     0.00333333  1/K
+    kappa_T  =    9.86923e-06  1/Pa
+    mu_JT    =              0  K/Pa</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> μ = 1,770 × 10⁻⁵ Pa·s e <em>k</em> = 0,0250 W/m/K estão
+dentro de poucos por cento dos valores experimentais do N₂ — notável para um cálculo cujos únicos
+insumos moleculares são σ e ε. <em>Pr</em> = 0,737 é o resultado da forma fechada de Eucken para
+uma diatômica. <em>Z</em> = 1, β = 1/<em>T</em> = 0,00333 1/K, κ<sub>T</sub> = 1/<em>P</em> e
+μ<sub>JT</sub> = 0 são as assinaturas exatas do gás ideal: não são aproximações, mas consequências
+da equação de estado adotada.</p>
+
+<div class="callout note">
+  <span class="label">Dependência de pressão</span>
+  Num gás diluído, μ e <em>k</em> dependem apenas da temperatura. Já ν, α e <em>D</em> escalam com
+  1/<em>P</em>, porque envolvem a densidade. Ao comparar resultados, verifique sempre a que
+  pressão a difusividade foi avaliada.
+</div>
+
+<h3>8.2 Exemplo — uma única propriedade com gráfico</h3>
+
+<p><strong>Objetivo.</strong> Reportar apenas a viscosidade em um ponto e, na mesma execução,
+gerar a curva μ(<em>T</em>) de 300 K a 1500 K com 100 pontos.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --gas N2 --prop mu --Tmin 300 --Tmax 1500 --N 100 --png n2_viscosity.png</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  mu(N2) @ T=300.00 K, P=1.013e+05 Pa = 1.76985e-05 Pa·s
+  saved plot -&gt; n2_viscosity.png</pre>
+</div>
+
+<p><strong>Arquivo gerado.</strong> <code>n2_viscosity.png</code> (120 dpi). Se <code>--prop</code>
+for omitido junto com <code>--png</code>, a propriedade traçada por padrão é <code>mu</code>.</p>
+
+<p><strong>Como interpretar.</strong> O valor no ponto usa <code>--T</code> (padrão 300 K),
+enquanto a curva usa a faixa <code>--Tmin</code>/<code>--Tmax</code> — são controles independentes.
+Entre 300 K e 1500 K a curva cresce como ≈ <em>T</em><sup>0,66</sup> — mais íngreme que a
+previsão <em>T</em><sup>1/2</sup> da teoria cinética elementar, porque a integral de colisão
+Ω<sup>(2,2)*</sup> decresce com a temperatura reduzida.</p>
+
+<h3>8.3 Exemplo — difusão binária</h3>
+
+<p><strong>Objetivo.</strong> Calcular o coeficiente de difusão binária <em>D<sub>ij</sub></em>
+entre duas espécies, usando as regras de combinação de Lennard-Jones.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --gas N2 --binary N2 O2 --T 300 --P 101325</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  D(N2,O2) @ T=300.00 K, P=1.013e+05 Pa = 2.064420e-05 m^2/s</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> <em>D</em>(N₂,O₂) = 2,06 × 10⁻⁵ m²/s a 1 atm, valor
+consistente com a medida experimental. O coeficiente é simétrico —
+<em>D</em>(N₂,O₂) = <em>D</em>(O₂,N₂) — e escala com 1/<em>P</em>. O argumento
+<code>--gas</code> continua obrigatório pela estrutura do subcomando, mas <code>--binary</code>
+tem precedência sobre <code>--prop</code>.</p>
+
+<p>No terminal interativo, o mesmo cálculo é:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas N2
+&gt; T = 300
+&gt; P = 101325
+&gt; transport
+&gt; transport binary N2 O2
+&gt; transport mu 300 1500 100 n2_mu.png</code></pre>
+</div>
+
+<h3>8.4 Transporte do ar seco e do ar úmido</h3>
+
+<p>O subcomando <code>airtransport</code> aplica regras de mistura — Wilke para μ, Mason–Saxena
+para <em>k</em> e Blanc para a difusividade efetiva — à composição do ar, seco ou úmido.</p>
+
+<h4>Ar seco</h4>
+
+<p><strong>Objetivo.</strong> Quadro completo de transporte do ar seco a 300 K e 1 atm, com a
+contribuição de cada espécie.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy airtransport --T 300 --P 101325</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Air transport — Dry air @ T=300.0000 K, P=101325 Pa
+    mixing rules: mu=Wilke, k=Mason-Saxena, D_eff=Blanc
+    Dynamic viscosity              =    1.83511e-05  Pa·s
+    Kinematic viscosity            =    1.55959e-05  m^2/s
+    Thermal conductivity           =      0.0249919  W/m/K
+    Thermal diffusivity            =     2.1151e-05  m^2/s
+    Water-vapour diffusivity in air =    2.18993e-05  m^2/s
+    Prandtl number                 =        0.73736  -
+    Schmidt number                 =       0.712165  -
+    Lewis number                   =       0.965831  -
+    Density                        =        1.17666  kg/m^3
+    Specific gas constant          =        287.042  J/kg/K
+    Speed of sound                 =        347.245  m/s
+    Thermal expansion coefficient  =     0.00333333  1/K
+    Isothermal compressibility     =    9.86923e-06  1/Pa
+    Heat-capacity ratio            =        1.40025  -
+  --- Per-species contributions ---
+    Species         x          mu_i         k_i          D_im    mu_contrib   k_contrib
+    N2        0.7808    1.7698e-05  2.4960e-02    2.0584e-05    1.3838e-05  1.9185e-02
+    O2        0.2095    2.0569e-05  2.5544e-02    2.0628e-05    4.2786e-06  5.5673e-03
+    Ar        0.0093    2.2820e-05  1.7811e-02    1.9591e-05    2.2586e-07  2.2940e-04
+    CO2       0.0004    1.5186e-05  1.6399e-02    1.5600e-05    8.2395e-09  9.8475e-06</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> μ = 1,835 × 10⁻⁵ Pa·s e ρ = 1,177 kg/m³ concordam com os
+valores tabelados do ar a 300 K. Note que a viscosidade da mistura (1,835 × 10⁻⁵) <em>excede</em>
+a do N₂ puro (1,770 × 10⁻⁵) porque o O₂ e o Ar são mais viscosos — a regra de Wilke não é uma
+média molar simples. <em>Pr</em> = 0,737 é o resultado da forma fechada de Eucken; o valor experimental do ar
+gira em torno de 0,71, de modo que o desvio é de poucos por cento.</p>
+
+<h4>Ar úmido</h4>
+
+<p><strong>Objetivo.</strong> Repetir a avaliação com 50 % de umidade relativa, para quantificar o
+efeito do vapor d'água.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy airtransport --T 300 --P 101325 --rh 0.50</code></pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <code>--rh</code> é a umidade relativa adimensional no
+intervalo 0–1 (0,50 = 50 %). Alternativamente: <code>--w</code> para a razão de umidade em
+kg/kg de ar seco, <code>--x</code> para a fração molar de água, ou <code>--sat</code> para ar
+saturado.</p>
+
+<div class="output">
+  <div class="outhead">saída (trecho)</div>
+<pre>  Air transport — Humid air @ T=300.0000 K, P=101325 Pa, humidity ratio w=1.1029e-02 kg/kg
+    mixing rules: mu=Wilke, k=Mason-Saxena, D_eff=Blanc
+    Dynamic viscosity              =    1.82192e-05  Pa·s
+    Thermal conductivity           =      0.0250143  W/m/K
+    Prandtl number                 =       0.738198  -
+    Density                        =        1.16891  kg/m^3
+    Specific gas constant          =        288.945  J/kg/K
+    Speed of sound                 =        348.212  m/s
+    Heat-capacity ratio            =        1.39878  -
+  --- Per-species contributions ---
+    Species         x          mu_i         k_i          D_im    mu_contrib   k_contrib
+    N2        0.7672    1.7698e-05  2.4960e-02    2.0678e-05    1.3592e-05  1.8929e-02
+    O2        0.2058    2.0569e-05  2.5544e-02    2.0655e-05    4.2027e-06  5.4933e-03
+    Ar        0.0092    2.2820e-05  1.7811e-02    1.9616e-05    2.2191e-07  2.2633e-04
+    CO2       0.0004    1.5186e-05  1.6399e-02    1.5605e-05    8.0983e-09  9.7161e-06
+    H2O       0.0174    1.0757e-05  2.6204e-02    2.1899e-05    1.9456e-07  3.5628e-04</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A razão de umidade é
+<em>w</em> = 1,1029 × 10⁻² kg/kg de ar seco, isto é, <strong>11,03 g de vapor por kg de ar
+seco</strong>. Com 1,74 % molar de água, a viscosidade <em>cai</em> (1,822 × 10⁻⁵ contra
+1,835 × 10⁻⁵ do ar seco), porque o vapor d'água é a espécie menos viscosa da mistura
+(μ<sub>H₂O</sub> = 1,076 × 10⁻⁵ Pa·s). Já a condutividade térmica sobe ligeiramente, pois a água
+é a mais condutiva. A densidade diminui — o ar úmido é mais leve que o seco à mesma
+(<em>T</em>, <em>P</em>), já que M(H₂O) = 18 g/mol substitui moléculas de 28–32 g/mol —, e por
+isso a velocidade do som aumenta.</p>
+
+<h4>Gráfico comparativo e banco de espécies</h4>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code># curva comparativa ar seco vs ar úmido (viscosidade vs T)
+statthermopy airtransport --T 300 --P 101325 --rh 0.50 --prop mu \
+    --Tmin 250 --Tmax 400 --N 100 --png air_mu.png
+
+# contribuições por espécie
+statthermopy airtransport --T 300 --P 101325 --rh 0.50 --species
+
+# banco estendido de transporte por espécie
+statthermopy airtransport --db</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída de --db</div>
+<pre>  Air-transport species database:
+    Ar    M=39.9480 g/mol  sigma=3.542 A  eps/k=93.30 K  omega=-0.0022  Tc=150.86 K, ...
+    CO2   M=44.0095 g/mol  sigma=3.941 A  eps/k=195.20 K  omega=0.2284  Tc=304.13 K, ...
+    H2O   M=18.0153 g/mol  sigma=2.641 A  eps/k=809.10 K  omega=0.3452  Tc=647.10 K, ...
+    N2    M=28.0134 g/mol  sigma=3.798 A  eps/k=71.40 K   omega=0.0372  Tc=126.19 K, ...
+    O2    M=31.9988 g/mol  sigma=3.467 A  eps/k=106.70 K  omega=0.0222  Tc=154.58 K, ...</pre>
+</div>
+
+<div class="callout warn">
+  <span class="label">Domínio de validade</span>
+  Este é o regime de gás diluído/ideal (primeira aproximação de Chapman–Enskog), válido de 0 K até
+  a maior temperatura suportada, a pressões baixas a moderadas. Espécies polares (H₂O, NH₃, H₂S,
+  SO₂) usam a aproximação de Lennard-Jones, com incerteza maior — o fato é anotado espécie a
+  espécie no respectivo arquivo YAML.
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ----------------------------------------------------------- 9. AR ÚMIDO -->
+<h2 id="ar-umido">9. Ar úmido</h2>
+
+<p>O módulo de ar úmido determina a <strong>solubilidade máxima de vapor d'água no ar</strong> em
+função de temperatura e pressão a partir do equilíbrio líquido–vapor:</p>
+
+<div class="equation">
+  <em>μ</em><sub>v</sub>(<em>T</em>, <em>P</em>) = <em>μ</em><sub>l</sub>(<em>T</em>, <em>P</em>)
+  <span class="caption">A energia de Gibbs do vapor vem inteiramente da função de partição da
+  água; a do líquido, de uma referência plugável (IAPWS-95 ou <em>c<sub>p</sub></em> constante),
+  unidas por uma âncora no ponto triplo. Nenhuma correlação de Antoine, Magnus ou Tetens é
+  empregada.</span>
+</div>
+
+<h3>9.1 Exemplo — estado psicrométrico completo</h3>
+
+<p><strong>Objetivo.</strong> Caracterizar o ar a 305 K (31,85 °C) e 1 atm com 50 % de umidade
+relativa: limite de saturação, estado real, propriedades da mistura e a desagregação da função de
+partição do vapor.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy humidair --T 305 --P 101325 --rh 0.50</code></pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <code>--T</code> em kelvin, <code>--P</code> em pascal,
+<code>--rh</code> adimensional no intervalo 0–1. Se <code>--rh</code> for omitido, o estado
+calculado é o <strong>saturado</strong>, isto é, a solubilidade máxima.</p>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Statistical Humid Air — moist air
+  T = 305.0000 K (31.85 C)   P = 101325 Pa   liquid model: iapws95
+  --- Saturation limit (max water the air can hold) ---
+    P_sat                 =      4709.6244  Pa
+    x_H2O,max             =       0.046480  mol/mol
+    mass_fraction,max     =       0.029425  kg/kg
+    humidity_ratio,max    =      30.317427  g/kg dry air
+    abs_humidity,max      =      33.457483  g/m3
+    vapor_conc,max        =       1.857173  mol/m3
+  --- Actual state ---
+    relative_humidity     =       0.500000
+    humidity_ratio        =      14.798040  g/kg dry air
+    x_H2O                 =       0.023240  mol/mol
+    degree_of_saturation  =       0.488103
+    dew_point             =     293.2746  K (20.12 C)
+    wet_bulb              =     296.6749  K (23.52 C)
+  --- Mixture bulk ---
+    density               =       1.147199  kg/m3
+    M_avg                 =      28.711514  g/mol
+    R_specific            =     289.586350  J/kg/K
+  --- Thermodynamics (molar) ---
+    U_m       =      6349.197444  J/mol
+    H_m       =      8885.108542  J/mol
+    S_m       =       200.010797  J/mol/K
+    Cv_m      =        20.882408  J/mol/K
+    Cp_m      =        29.196870  J/mol/K
+    gamma     =         1.398156  -
+    S_mixing  =         5.525840  J/mol/K
+  --- Water-vapour partition-function contributions (to G_m, J/mol) ---
+    factor                   G_m         S_m      Cv_m
+    translational     -47509.309    176.5544   12.4717
+    rotational         -9632.238     44.0528   12.4717
+    vibrational           -1.370      0.0383    0.2545
+    electronic             0.000      0.0000    0.0000</pre>
+</div>
+
+<p><strong>Como interpretar.</strong></p>
+<ul>
+  <li><strong>Pressão de saturação.</strong> <em>P</em><sub>sat</sub> = 4709,6 Pa a 31,85 °C —
+  próximo do valor tabelado de vapor d'água, obtido aqui sem correlação empírica.</li>
+  <li><strong>Razão de umidade máxima.</strong> 30,317 g/kg de ar seco, equivalentes a
+  <strong>0,030317 kg/kg</strong>. O relatório usa g/kg; ao convertê-la para kg/kg divida por
+  1000 uma única vez.</li>
+  <li><strong>Estado real.</strong> Com <em>RH</em> = 0,50, a razão de umidade é 14,798 g/kg
+  (= 0,014798 kg/kg), pouco menos da metade do valor de saturação — a razão é 0,4881, que é
+  exatamente o <em>grau de saturação</em> reportado. Ele difere de <em>RH</em> porque um se
+  define sobre razões de massa e o outro sobre pressões parciais.</li>
+  <li><strong>Ponto de orvalho.</strong> 293,27 K (20,12 °C): resfriar este ar abaixo de 20,1 °C
+  inicia a condensação.</li>
+  <li><strong>Bulbo úmido.</strong> 296,67 K (23,52 °C), entre o orvalho e o bulbo seco, como
+  exige a psicrometria.</li>
+  <li><strong>Desagregação do vapor.</strong> A entropia do vapor d'água é dominada pelos modos
+  translacional (176,55 J/mol/K) e rotacional (44,05); a contribuição vibracional é quase nula a
+  305 K, pois os modos da água estão em 1595–3756 cm⁻¹.</li>
+</ul>
+
+<div class="callout warn">
+  <span class="label">Consistência de unidades na razão de umidade</span>
+  O relatório imprime a razão de umidade em <strong>g de vapor por kg de ar seco</strong>, ao passo
+  que o subcomando <code>airtransport</code> a imprime em <strong>kg/kg</strong> e o argumento
+  <code>--w</code> a recebe em <strong>kg/kg</strong>. Assim, ≈ 30 g/kg equivalem a 0,030 kg/kg.
+  Aplique a conversão por 1000 uma única vez: o valor numérico e o rótulo devem sempre concordar.
+</div>
+
+<h3>9.2 Estado saturado</h3>
+
+<p><strong>Objetivo.</strong> Obter diretamente a solubilidade máxima, omitindo <code>--rh</code>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy humidair --T 305 --P 101325</code></pre>
+</div>
+
+<p><strong>Como interpretar.</strong> O cabeçalho passa a indicar
+<code>SATURATED (maximum solubility)</code>, a umidade relativa vale 1,0, o grau de saturação
+vale 1,0 e o ponto de orvalho coincide com a temperatura de bulbo seco.</p>
+
+<h3>9.3 Especificações alternativas de umidade (terminal interativo)</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; T = 305
+&gt; P = 101325
+&gt; humidair                # limite de saturação
+&gt; humidair rh=0.5         # umidade relativa de 50 %
+&gt; humidair w=0.012        # razão de umidade 0,012 kg/kg de ar seco (= 12 g/kg)
+&gt; humidair x=0.02         # fração molar de H2O igual a 0,02</code></pre>
+</div>
+
+<div class="callout note">
+  <span class="label">Atenção às unidades de <code>w=</code></span>
+  No terminal, <code>w=</code> recebe kg/kg de ar seco, não g/kg. Portanto <code>w=0.012</code>
+  significa 12 g de vapor por kg de ar seco, e o relatório o exibirá como
+  <code>12.000000 g/kg dry air</code>.
+</div>
+
+<h3>9.4 Curvas do módulo de ar úmido</h3>
+
+<p><strong>Objetivo.</strong> Traçar grandezas psicrométricas em função da temperatura. A sintaxe é
+<code>humidair &lt;chave&gt; Tmin Tmax [N] [saida.png]</code>, com as chaves
+<code>psat</code>, <code>solubility</code>, <code>w</code> e <code>rh</code>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; P = 101325
+&gt; humidair psat 273.16 373.15 100 psat.png
+&gt; humidair solubility 273.16 373.15 100 solubilidade.png
+&gt; humidair w 273.16 373.15 100 razao_umidade.png</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  saved plot -&gt; psat.png
+  saved plot -&gt; solubilidade.png
+  saved plot -&gt; razao_umidade.png</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A faixa 273,16–373,15 K vai do ponto triplo ao ponto normal
+de ebulição. A curva de <em>P</em><sub>sat</sub> é quase exponencial (comportamento de
+Clausius–Clapeyron) e atinge ≈ 101,3 kPa a 373,15 K — a definição do ponto de ebulição, aqui
+recuperada, e não imposta.</p>
+
+<div class="callout note">
+  <span class="label">Análise crítica dos modelos de fase líquida</span>
+  A discussão dos modelos estatísticos de fase líquida (SAFT, teoria de perturbação, equações
+  integrais e outros) está em <code>docs/HUMID_AIR.md</code>, no repositório.
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------------------ 10. GUI -->
+<h2 id="gui">10. Uso da interface gráfica</h2>
+
+<p>A GUI é opcional e requer PySide6. Instale e execute com:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>python -m pip install -e ".[gui]"
+statthermopy-gui        # ou: python -m statthermopy.gui.app</code></pre>
+</div>
+
+<figure>
+  <img src="docs/images/gui_properties.png"
+       alt="Interface gráfica do StatThermoPy — aba Properties, com o editor de gás puro ou mistura, as entradas de estado e as tabelas de resultados e de desagregação por modo.">
+  <figcaption><strong>Figura 1.</strong> Aba <em>Properties</em>: editor de gás puro ou mistura,
+  entradas de estado e tabelas de resultados com a desagregação por modo, em layout de duas
+  colunas.</figcaption>
+</figure>
+
+<div class="figgrid">
+  <figure>
+    <img src="docs/images/gui_plot.png"
+         alt="Aba Plot da interface gráfica, com uma curva de propriedade em função da temperatura em canvas matplotlib incorporado.">
+    <figcaption><strong>Figura 2.</strong> Aba <em>Plot</em> — qualquer propriedade em função de
+    <em>T</em>, em canvas matplotlib incorporado.</figcaption>
+  </figure>
+  <figure>
+    <img src="docs/images/gui_transport.png"
+         alt="Aba Transport da interface gráfica, com a tabela de avaliação pontual das propriedades de transporte e as curvas correspondentes.">
+    <figcaption><strong>Figura 3.</strong> Aba <em>Transport</em> — avaliação pontual, curvas vs
+    <em>T</em> / vs <em>P</em> e mapas 2-D <em>T</em>×<em>P</em>.</figcaption>
+  </figure>
+  <figure>
+    <img src="docs/images/gui_validate.png"
+         alt="Aba Validate da interface gráfica, exibindo o selo colorido de veredito PASS ou FAIL e o gráfico de comparação entre motor e referência.">
+    <figcaption><strong>Figura 4.</strong> Aba <em>Validate</em> — motor vs NIST/JANAF, com selo
+    de veredito PASS/FAIL e gráfico de comparação.</figcaption>
+  </figure>
+  <figure>
+    <img src="docs/images/gui_dark.png"
+         alt="Interface gráfica do StatThermoPy no tema escuro, mostrando a paleta semântica e os canvases matplotlib recoloridos.">
+    <figcaption><strong>Figura 5.</strong> Tema escuro — os canvases matplotlib acompanham a
+    troca de tema.</figcaption>
+  </figure>
+</div>
+
+<h3>10.1 Abas disponíveis</h3>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Aba</th><th>Função</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Properties</strong></td><td>Editor de gás puro ou mistura, entradas de estado, tabelas de resultados e desagregação por modo, em layout de duas colunas.</td></tr>
+      <tr><td><strong>Plot</strong></td><td>Qualquer propriedade em função de <em>T</em>, em canvas matplotlib incorporado.</td></tr>
+      <tr><td><strong>Transport</strong></td><td>Tabela de avaliação pontual de todas as propriedades de transporte em um dado (<em>T</em>, <em>P</em>), curvas vs <em>T</em> / vs <em>P</em> e mapas 2-D <em>T</em>×<em>P</em> com seleção múltipla de propriedades, exportáveis para CSV/Excel/Tecplot/PNG/PDF.</td></tr>
+      <tr><td><strong>Humid Air</strong></td><td>Conjunto psicrométrico, curvas e a superfície 3-D de solubilidade(<em>T</em>, <em>P</em>).</td></tr>
+      <tr><td><strong>Thermodynamic Comparisons</strong></td><td>Comparação gráfica ar seco vs ar úmido de qualquer propriedade, sob restrições isobárica e isocórica, com legenda interativa, tooltips e zoom/pan.</td></tr>
+      <tr><td><strong>Validate</strong></td><td>Motor vs NIST/JANAF, com selo colorido de veredito PASS/FAIL e gráfico de comparação.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>A interface segue um sistema de design harmônico claro/escuro (paleta semântica, botões
+primários de destaque, estados <em>hover</em>/pressionado/desabilitado, bordas arredondadas e
+ícones vetoriais). O menu <strong>View → Theme</strong> alterna entre Light, Dark e System.</p>
+
+<div class="callout note">
+  <span class="label">A GUI não acrescenta física</span>
+  A interface gráfica envolve exatamente a mesma API pública usada pela CLI. Qualquer resultado
+  obtido nela é reproduzível por linha de comando ou por script.
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------------------- 11. CLI -->
+<h2 id="cli">11. Uso da CLI</h2>
+
+<p>O executável <code>statthermopy</code> opera em dois modos. Sem argumentos (ou com
+<code>repl</code>), abre o <strong>terminal científico interativo</strong>. Com um subcomando,
+executa um cálculo direto e encerra.</p>
+
+<h3>11.1 Subcomandos de execução direta</h3>
+
+<div class="table-wrap">
+  <table>
+    <caption>Subcomandos e seus argumentos, conforme <code>src/statthermopy/cli/app.py</code>.</caption>
+    <thead><tr><th>Subcomando</th><th>Argumentos</th><th>Finalidade</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>repl</code></td>
+        <td>—</td>
+        <td>Terminal interativo (padrão quando nenhum subcomando é dado).</td>
+      </tr>
+      <tr>
+        <td><code>run</code></td>
+        <td><code>--gas</code>, <code>--T</code> (298.15), <code>--P</code> (101325), <code>--n</code> (1.0), <code>--mixture</code>, <code>--fluid</code>, <code>--humidity</code> (0.0), <code>--basis</code> (mole|mass), <code>--export FMT PATH</code></td>
+        <td>Propriedades termodinâmicas de gás puro, mistura ou fluido predefinido.</td>
+      </tr>
+      <tr>
+        <td><code>transport</code></td>
+        <td><code>--gas</code> <em>(obrigatório)</em>, <code>--T</code> (300), <code>--P</code> (101325), <code>--prop</code>, <code>--binary A B</code>, <code>--Tmin</code> (300), <code>--Tmax</code> (1500), <code>--N</code> (100), <code>--png</code></td>
+        <td>Propriedades de transporte de um gás puro e difusão binária.</td>
+      </tr>
+      <tr>
+        <td><code>humidair</code></td>
+        <td><code>--T</code> (298.15), <code>--P</code> (101325), <code>--rh</code></td>
+        <td>Ar úmido estatístico; sem <code>--rh</code>, calcula o estado saturado.</td>
+      </tr>
+      <tr>
+        <td><code>airtransport</code></td>
+        <td><code>--T</code> (298.15), <code>--P</code> (101325), <code>--rh</code>, <code>--w</code>, <code>--x</code>, <code>--sat</code>, <code>--prop</code>, <code>--species</code>, <code>--db</code>, <code>--Tmin</code> (250), <code>--Tmax</code> (400), <code>--N</code> (100), <code>--png</code>, <code>--export FMT PATH</code></td>
+        <td>Transporte do ar seco e do ar úmido, com regras de mistura.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>11.2 Coletânea de comandos diretos</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas N2 --T 298.15 --P 101325
+statthermopy run --gas CO2 --T 800 --P 500000
+statthermopy run --fluid Air --T 300 --P 101325
+statthermopy transport --gas N2 --T 300 --P 101325
+statthermopy transport --gas N2 --prop mu --Tmin 300 --Tmax 1500 --N 100 --png n2_viscosity.png
+statthermopy humidair --T 305 --P 101325 --rh 0.50
+statthermopy airtransport --T 300 --P 101325
+statthermopy airtransport --T 300 --P 101325 --rh 0.50</code></pre>
+</div>
+
+<h3>11.3 Comandos do terminal interativo</h3>
+
+<div class="table-wrap">
+  <table>
+    <caption>Comandos do REPL. Use <code>help</code> para a lista embutida e
+    <code>help &lt;comando&gt;</code> para detalhes.</caption>
+    <thead><tr><th>Comando</th><th>Sintaxe</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><code>list</code></td><td><code>list</code></td><td>Lista as 30 espécies do banco.</td></tr>
+      <tr><td><code>gas</code></td><td><code>gas N2</code></td><td>Seleciona um gás puro.</td></tr>
+      <tr><td><code>mixture</code></td><td><code>mixture Ar:0.7 N2:0.3 [mass]</code></td><td>Define uma mistura; <code>mass</code> troca a base molar por mássica.</td></tr>
+      <tr><td><code>fluids</code></td><td><code>fluids</code></td><td>Lista os fluidos predefinidos.</td></tr>
+      <tr><td><code>fluid</code></td><td><code>fluid Air [h2o=0.01]</code></td><td>Seleciona um fluido predefinido, com vapor d'água opcional.</td></tr>
+      <tr><td><code>T</code>, <code>P</code>, <code>V</code>, <code>n</code>, <code>m</code></td><td><code>T = 298.15</code></td><td>Define temperatura (K), pressão (Pa), volume (m³), quantidade (mol) e massa (kg).</td></tr>
+      <tr><td><code>state</code></td><td><code>state</code></td><td>Mostra as variáveis de estado definidas.</td></tr>
+      <tr><td><code>properties</code></td><td><code>properties</code> ou <code>props</code></td><td>Calcula e imprime todas as propriedades.</td></tr>
+      <tr><td><code>modes</code></td><td><code>modes</code></td><td>Desagregação por modo da função de partição.</td></tr>
+      <tr><td><code>plot</code></td><td><code>plot Cp_m 300 1500 100 saida.png</code></td><td>Gráfico de propriedade vs <em>T</em>.</td></tr>
+      <tr><td><code>export</code></td><td><code>export csv saida.csv</code></td><td>Exporta o último resultado de gás puro.</td></tr>
+      <tr><td><code>transport</code></td><td><code>transport</code> · <code>transport mu 300 1500 100 f.png</code> · <code>transport binary N2 O2</code></td><td>Propriedades de transporte, curvas e difusão binária.</td></tr>
+      <tr><td><code>humidair</code></td><td><code>humidair [rh=|w=|x=]</code> · <code>humidair psat 273.16 373.15 100 f.png</code></td><td>Ar úmido: estado pontual ou curvas.</td></tr>
+      <tr><td><code>airtransport</code></td><td><code>airtransport [humid|species|db|export|&lt;prop&gt;]</code></td><td>Transporte do ar seco e úmido.</td></tr>
+      <tr><td><code>quit</code></td><td><code>quit</code>, <code>exit</code> ou Ctrl-D</td><td>Encerra o terminal.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout note">
+  <span class="label">Sintaxe das atribuições</span>
+  O sinal de igual é opcional: <code>T = 298.15</code>, <code>T= 298.15</code> e
+  <code>T 298.15</code> são equivalentes. Caminhos do Windows com barras invertidas são
+  preservados corretamente, de modo que <code>export csv C:\dados\n2.csv</code> funciona.
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ----------------------------------------------------- 12. EXPORTAÇÃO -->
+<h2 id="exportacao">12. Exportação de resultados</h2>
+
+<p>Resultados de <strong>gás puro</strong> podem ser exportados em cinco formatos. O relatório é
+calculado normalmente e, em seguida, gravado no arquivo indicado.</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Formatos de exportação para resultados de gás puro.</caption>
+    <thead><tr><th>Formato</th><th>Palavra-chave</th><th>Uso típico</th><th>Requisito</th></tr></thead>
+    <tbody>
+      <tr><td>CSV</td><td><code>csv</code></td><td>Planilhas, pós-processamento em pandas/R.</td><td>—</td></tr>
+      <tr><td>JSON</td><td><code>json</code></td><td>Intercâmbio entre programas, APIs.</td><td>—</td></tr>
+      <tr><td>YAML</td><td><code>yaml</code></td><td>Arquivos de configuração legíveis.</td><td>—</td></tr>
+      <tr><td>Excel</td><td><code>excel</code></td><td>Relatórios em planilha <code>.xlsx</code>.</td><td><code>openpyxl</code></td></tr>
+      <tr><td>LaTeX</td><td><code>latex</code></td><td>Tabelas prontas para artigos e teses.</td><td>—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>12.1 Exemplo — os cinco formatos</h3>
+
+<p><strong>Objetivo.</strong> Gravar o relatório do N₂ a 298,15 K e 1 atm em cada formato
+suportado.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas N2 --T 298.15 --P 101325 --export csv   n2.csv
+statthermopy run --gas N2 --T 298.15 --P 101325 --export json  n2.json
+statthermopy run --gas N2 --T 298.15 --P 101325 --export yaml  n2.yaml
+statthermopy run --gas N2 --T 298.15 --P 101325 --export excel n2.xlsx
+statthermopy run --gas N2 --T 298.15 --P 101325 --export latex n2.tex</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (última linha de cada execução)</div>
+<pre>  exported -&gt; n2.csv
+  exported -&gt; n2.json
+  exported -&gt; n2.yaml
+  exported -&gt; n2.xlsx
+  exported -&gt; n2.tex</pre>
+</div>
+
+<p><strong>Arquivos gerados.</strong> Cinco arquivos no diretório de trabalho, cada um contendo o
+mesmo conteúdo: estado, massa molar, propriedades molares e mássicas e os fatores da função de
+partição. A extensão do arquivo é livre — o formato é determinado pela palavra-chave, não pela
+extensão —, mas convém mantê-las coerentes para que outros programas os reconheçam.</p>
+
+<p><strong>Como interpretar.</strong> Use CSV ou Excel para análise tabular, JSON para
+integração programática, YAML quando o arquivo precisar ser lido e editado por pessoas, e LaTeX
+para inserir a tabela diretamente em um manuscrito.</p>
+
+<p>No terminal interativo, o mesmo se faz em duas etapas:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas N2
+&gt; T = 298.15
+&gt; P = 101325
+&gt; properties
+&gt; export csv n2.csv
+&gt; export latex n2.tex</code></pre>
+</div>
+
+<div class="callout warn">
+  <span class="label">Misturas e fluidos: exportação apenas em JSON</span>
+  Na execução direta com <code>--mixture</code> ou <code>--fluid</code>, apenas
+  <code>--export json &lt;arquivo&gt;</code> grava um arquivo; as demais palavras-chave são aceitas
+  sem produzir saída. O comando <code>export</code> do terminal interativo também opera somente
+  sobre resultados de gás puro. Para exportar misturas em outros formatos, use a classe
+  <code>Exporter</code> pela API Python.
+</div>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --fluid Air --T 300 --P 101325 --export json air.json</code></pre>
+</div>
+
+<h3>12.2 Exportação do módulo de transporte do ar</h3>
+
+<p>O subcomando <code>airtransport</code> possui exportação própria, com quatro formatos:
+<code>csv</code>, <code>excel</code>, <code>json</code> e <code>pdf</code>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy airtransport --T 300 --P 101325 --rh 0.50 --export csv air_transport.csv
+statthermopy airtransport --T 300 --P 101325 --export pdf ar_seco.pdf</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  exported -&gt; air_transport.csv</pre>
+</div>
+
+<p><strong>Arquivo gerado.</strong> A avaliação pontual (todas as propriedades no
+(<em>T</em>, <em>P</em>) dado, mais as contribuições por espécie). No terminal interativo, é
+preciso calcular o ponto antes de exportar:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; T = 300
+&gt; P = 101325
+&gt; airtransport humid rh=0.5
+&gt; airtransport export csv air_transport.csv</code></pre>
+</div>
+
+<h3>12.3 Gráficos gerados</h3>
+
+<p>Todo comando que aceita um nome de arquivo <code>.png</code> grava a figura a 120 dpi, com as
+margens ajustadas. Resumo dos caminhos de geração:</p>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Origem</th><th>Comando</th><th>Padrão de nome</th></tr></thead>
+    <tbody>
+      <tr><td>Propriedade termodinâmica vs <em>T</em></td><td><code>plot Cp_m 200 2000 100 [saida.png]</code></td><td><code>&lt;GAS&gt;_&lt;prop&gt;.png</code></td></tr>
+      <tr><td>Transporte vs <em>T</em> (REPL)</td><td><code>transport mu 300 1500 100 [saida.png]</code></td><td><code>&lt;GAS&gt;_transport_&lt;prop&gt;.png</code></td></tr>
+      <tr><td>Transporte vs <em>T</em> (direto)</td><td><code>transport --gas N2 --prop mu --png saida.png</code></td><td>obrigatório em <code>--png</code></td></tr>
+      <tr><td>Ar úmido vs <em>T</em></td><td><code>humidair psat 273.16 373.15 100 [saida.png]</code></td><td><code>humidair_&lt;chave&gt;.png</code></td></tr>
+      <tr><td>Ar seco vs úmido</td><td><code>airtransport --prop mu --png saida.png</code></td><td><code>air_transport_&lt;prop&gt;.png</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------------- 13. VALIDAÇÃO -->
+<h2 id="validacao">13. Validação</h2>
+
+<p>StatThermoPy embarca <strong>tabelas de referência curadas</strong> de <em>C<sub>p</sub></em>°
+molar e <em>S</em>° molar absoluta (J/mol/K, estado padrão 1 bar) para as
+<strong>30 espécies</strong> do banco molecular. Elas servem exclusivamente à camada opcional de
+validação — nunca ao cálculo.</p>
+
+<div class="callout note">
+  <span class="label">Somente valores, nunca coeficientes</span>
+  Nenhum coeficiente de correlação empírica (NASA, Shomate ou JANAF) reside no pacote. As tabelas
+  foram produzidas avaliando-se as equações de Shomate do NIST Chemistry WebBook nas temperaturas
+  da grade; os coeficientes em si não são distribuídos. Cada YAML em
+  <code>statthermopy.validation.data</code> cita sua fonte e é refinável.
+</div>
+
+<div class="table-wrap">
+  <table>
+    <caption>Procedência dos dados de referência embarcados.</caption>
+    <thead><tr><th>Fonte</th><th>Espécies</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td>NIST WebBook (Shomate)</td><td>25 espécies</td><td>Avaliadas na grade de temperatura; apenas os valores são distribuídos.</td></tr>
+      <tr><td>NASA Glenn (7 coeficientes)</td><td><code>C2H6</code>, <code>C3H8</code>, <code>C6H6</code></td><td>McBride, Zehe &amp; Gordon, NASA/TP-2002-211556 — o NIST WebBook não publica ajuste de Shomate para estas.</td></tr>
+      <tr><td>Shomate em fase gasosa</td><td><code>I2</code></td><td>O ajuste cobre 457,666–2000 K (acima do ponto de sublimação a 1 atm), de modo que a grade começa em 500 K.</td></tr>
+      <tr><td>Burcat &amp; Ruscic (NASA-7)</td><td><code>CH3CCl3</code></td><td>T11/03, respecth.elte.hu — mesma razão.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>13.1 Validação pela API</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">python</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>from statthermopy.validation import validate, list_references
+
+print(list_references())          # ['AR', 'C2H2', 'C2H4', 'C2H6', 'C3H8', 'CH4', 'CL2', 'CO', ...]
+                                  # 30 espécies: o banco molecular completo
+r = validate("N2", "Cp")
+print(r.mean_abs_error_percent)   # ~0.38 % (rotor rígido / oscilador harmônico)</code></pre>
+</div>
+
+<h3>13.2 Exemplo pronto</h3>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>python examples/validate.py</code></pre>
+</div>
+
+<h3>13.3 Por que <em>C<sub>p</sub></em> e <em>S</em> comparam-se diretamente</h3>
+
+<p><em>C<sub>p</sub></em> é independente da pressão num gás ideal, e <em>S</em>° é uma grandeza
+absoluta (de terceira lei). Ambas, portanto, correspondem à saída molar do motor sem necessidade
+de deslocamento de estado de referência. A entropia é validada à pressão do estado padrão da
+referência (1 bar), já que o termo translacional carrega a dependência de pressão, por
+ln(<em>kT</em>/<em>P</em>).</p>
+
+<h3>13.4 Acurácia esperada</h3>
+
+<p>O modelo de rotor rígido e oscilador harmônico afasta-se do experimento em até alguns por cento
+em alta temperatura: a anarmonicidade desprezada faz o motor <em>subestimar</em>
+<em>C<sub>p</sub></em> a 2000 K (≈ 4 % para o H₂, o pior caso do conjunto). A tolerância de
+validação é de <strong>5 % de erro médio absoluto</strong>. Espécies de camada aberta
+(O₂ ³Σ<sub>g</sub>⁻, NO ²Π) incluem seus termos eletrônicos de baixa energia, que o motor
+reproduz.</p>
+
+<div class="callout warn">
+  <span class="label">Casos de maior desvio</span>
+  Algumas espécies carregam constantes espectroscópicas aproximadas e refináveis (por exemplo
+  C2H6, C3H8, SO2 e H2S). A ligação muito suave do I₂ (214,5 cm⁻¹) torna sua anarmonicidade o
+  maior desvio de <em>C<sub>p</sub></em> do conjunto, ≈ 4 %.
+</div>
+
+<h3>13.5 Validação pela interface gráfica</h3>
+
+<p>A aba <strong>Validate</strong> executa a mesma comparação, exibindo um selo colorido de
+veredito PASS/FAIL e um gráfico do motor sobreposto à referência (Figura 4).</p>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- --------------------------------------------------- 14. SOLUÇÃO DE PROBLEMAS -->
+<h2 id="problemas">14. Solução de problemas</h2>
+
+<div class="table-wrap">
+  <table>
+    <caption>Sintomas frequentes, causas prováveis e como resolver.</caption>
+    <thead><tr><th>Sintoma</th><th>Causa</th><th>Solução</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>error: select a gas first, e.g. gas N2</code></td>
+        <td>Nenhum gás selecionado no terminal interativo.</td>
+        <td>Execute <code>gas N2</code> (ou <code>mixture</code> / <code>fluid</code>) antes de <code>properties</code>, <code>modes</code>, <code>plot</code> ou <code>transport</code>.</td>
+      </tr>
+      <tr>
+        <td><code>error: set temperature first, e.g. T = 298.15</code></td>
+        <td>A temperatura não foi definida.</td>
+        <td>Defina <code>T = &lt;valor em K&gt;</code>. A pressão é opcional: na ausência, adota-se 101325 Pa.</td>
+      </tr>
+      <tr>
+        <td><code>error: 'XYZ'</code> ao selecionar um gás</td>
+        <td>Espécie inexistente no banco.</td>
+        <td>Confira a grafia com <code>list</code>. O banco tem 30 espécies e os nomes não distinguem maiúsculas.</td>
+      </tr>
+      <tr>
+        <td><code>error: nothing to export; run `properties` first.</code></td>
+        <td>Tentativa de exportar sem resultado calculado, ou resultado de mistura.</td>
+        <td>Rode <code>properties</code> antes de <code>export</code>. Misturas e fluidos exportam apenas por <code>run --export json</code> ou pela API.</td>
+      </tr>
+      <tr>
+        <td><code>--export csv</code> não gera arquivo com <code>--fluid</code> ou <code>--mixture</code></td>
+        <td>Nesse caminho, apenas o formato JSON é gravado.</td>
+        <td>Use <code>--export json &lt;arquivo&gt;</code>, ou a classe <code>Exporter</code> pela API Python.</td>
+      </tr>
+      <tr>
+        <td><code>ModuleNotFoundError: No module named 'PySide6'</code></td>
+        <td>GUI não instalada.</td>
+        <td><code>python -m pip install -e ".[gui]"</code></td>
+      </tr>
+      <tr>
+        <td>Erro ao exportar para Excel</td>
+        <td><code>openpyxl</code> ausente.</td>
+        <td><code>python -m pip install -e ".[excel]"</code></td>
+      </tr>
+      <tr>
+        <td><code>liquid model</code> aparece como constante-<em>c<sub>p</sub></em>, e não <code>iapws95</code></td>
+        <td>Pacote <code>iapws</code> ausente.</td>
+        <td><code>python -m pip install -e ".[humidair]"</code>. Sem ele, o módulo continua funcionando com um líquido transparente de <em>c<sub>p</sub></em> constante, porém menos acurado.</td>
+      </tr>
+      <tr>
+        <td>Backend CUDA não acelera</td>
+        <td>Nenhuma GPU NVIDIA detectada.</td>
+        <td>Comportamento previsto: o backend cai automaticamente para Numba em CPU, com um aviso. Verifique com <code>available_backends()</code>.</td>
+      </tr>
+      <tr>
+        <td><code>{name} is missing lennard_jones parameters</code></td>
+        <td>Espécie adicionada ao banco sem o bloco <code>lennard_jones</code>.</td>
+        <td>Acrescente <code>sigma_angstrom</code> e <code>epsilon_over_k</code> ao YAML da espécie; sem eles o módulo de transporte não pode operar.</td>
+      </tr>
+      <tr>
+        <td>Razão de umidade parece 1000× fora</td>
+        <td>Dupla conversão de unidade.</td>
+        <td>O relatório de <code>humidair</code> imprime g/kg de ar seco; <code>airtransport</code> e o argumento <code>--w</code> usam kg/kg. 30 g/kg = 0,030 kg/kg — converta uma única vez.</td>
+      </tr>
+      <tr>
+        <td><code>error: Tmax must exceed Tmin.</code></td>
+        <td>Faixa de temperatura invertida ou nula no gráfico comparativo.</td>
+        <td>Garanta <em>T</em><sub>max</sub> &gt; <em>T</em><sub>min</sub>.</td>
+      </tr>
+      <tr>
+        <td>Gráfico salvo em local inesperado</td>
+        <td>Caminhos relativos usam o diretório de trabalho atual.</td>
+        <td>Informe um caminho absoluto, ou execute o comando a partir do diretório desejado.</td>
+      </tr>
+      <tr>
+        <td>Desvio de <em>C<sub>p</sub></em> acima de 5 % em alta temperatura</td>
+        <td>Anarmonicidade desprezada pelo modelo de oscilador harmônico.</td>
+        <td>Limitação conhecida e documentada. Os piores casos são H₂ e I₂ (≈ 4 %); veja a seção de <a href="#validacao">Validação</a>.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+<!-- ------------------------------------------------- 15. LICENÇA E AUTORIA -->
+<h2 id="licenca">15. Licença, autoria e citação</h2>
+
+<h3>15.1 Licença</h3>
+
+<p>StatThermoPy é distribuído sob a <strong>Licença MIT</strong>.
+Copyright © 2026 StatThermoPy Contributors. O texto integral está no arquivo
+<code>LICENSE</code>, na raiz do projeto.</p>
+
+<p>A licença permite uso, cópia, modificação, fusão, publicação, distribuição, sublicenciamento e
+venda, desde que o aviso de copyright e a permissão sejam mantidos em todas as cópias. O software
+é fornecido "COMO ESTÁ", sem garantia de qualquer natureza.</p>
+
+<h3>15.2 Autoria</h3>
+
+<div class="table-wrap">
+  <table>
+    <tbody>
+      <tr><th>Autor</th><td>I. L. Ferreira</td></tr>
+      <tr><th>Contato</th><td><code>ileao@ufpa.br</code></td></tr>
+      <tr><th>Versão</th><td>0.1.0</td></tr>
+      <tr><th>Python</th><td>≥ 3.11</td></tr>
+      <tr><th>Licença</th><td>MIT</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>15.3 Como citar</h3>
+
+<p>Ao usar o StatThermoPy em trabalho acadêmico, sugere-se a citação:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bibtex</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>@software{ferreira_statthermopy,
+  author  = {Ferreira, I. L.},
+  title   = {{StatThermoPy}: Statistical thermodynamics in Python --- thermodynamic
+             properties from the molecular partition function, with no empirical
+             correlations},
+  version = {0.1.0},
+  year    = {2026},
+  note    = {MIT License}
+}</code></pre>
+</div>
+
+<h3>15.4 Referências</h3>
+
+<ul>
+  <li><strong>Constantes espectroscópicas</strong> — McQuarrie, <em>Statistical Mechanics</em>;
+  Herzberg, <em>Molecular Spectra and Molecular Structure</em>; NIST CCCBDB.</li>
+  <li><strong>Dados de referência termoquímica</strong> — NIST Chemistry WebBook
+  (webbook.nist.gov), equações de Shomate; Chase, <em>NIST-JANAF Thermochemical Tables</em>
+  (1998).</li>
+  <li><strong>Polinômios NASA Glenn</strong> — McBride, Zehe &amp; Gordon,
+  NASA/TP-2002-211556.</li>
+  <li><strong>Polinômios NASA-7</strong> — Burcat &amp; Ruscic, <em>Third Millennium Ideal Gas
+  and Condensed Phase Thermochemical Database</em> (respecth.elte.hu).</li>
+  <li><strong>Parâmetros de Lennard-Jones</strong> — Svehla; Hirschfelder, Curtiss &amp; Bird,
+  <em>Molecular Theory of Gases and Liquids</em>.</li>
+  <li><strong>Água líquida</strong> — Formulação IAPWS-95.</li>
+</ul>
+
+<h3>15.5 Documentação complementar</h3>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Arquivo</th><th>Conteúdo</th></tr></thead>
+    <tbody>
+      <tr><td><code>README.md</code></td><td>Visão geral do projeto e referência rápida.</td></tr>
+      <tr><td><code>docs/THEORY.md</code></td><td>Formulação teórica completa: função de partição, modos, misturas, transporte e validação.</td></tr>
+      <tr><td><code>docs/HUMID_AIR.md</code></td><td>Análise crítica dos modelos estatísticos de fase líquida (SAFT, teoria de perturbação, equações integrais).</td></tr>
+      <tr><td><code>docs/theory.rst</code> · <code>docs/api.rst</code></td><td>Documentação Sphinx: teoria e referência de API.</td></tr>
+      <tr><td><code>examples/</code></td><td>Scripts executáveis: propriedades e gráficos do N₂, validação, exportação, panorama de todas as espécies e benchmarks.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<footer class="docfooter">
+  <p><strong>StatThermoPy</strong> 0.1.0 — Manual do Usuário. Autor: I. L. Ferreira
+  (<code>ileao@ufpa.br</code>). Licença MIT, Copyright © 2026 StatThermoPy Contributors.</p>
+  <p>Documento autônomo: funciona offline, sem dependências externas. Todos os comandos foram
+  conferidos contra <code>src/statthermopy/cli/app.py</code>.</p>
+</footer>
+
+<div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
+
+</main>
+</div>
+
+<script>
+/* ============================================================================
+   JavaScript mínimo, sem dependências: botões de cópia, alternância do menu
+   em telas estreitas e realce da seção corrente no sumário.
+   ========================================================================= */
+(function () {
+  "use strict";
+
+  /* -- botões "Copiar" ---------------------------------------------------- */
+  document.querySelectorAll(".codeblock").forEach(function (block) {
+    var btn = block.querySelector(".copy-btn");
+    var pre = block.querySelector("pre");
+    if (!btn || !pre) return;
+
+    btn.addEventListener("click", function () {
+      var text = pre.innerText;
+
+      var done = function () {
+        var original = "Copiar";
+        btn.textContent = "Copiado!";
+        btn.classList.add("copied");
+        window.setTimeout(function () {
+          btn.textContent = original;
+          btn.classList.remove("copied");
+        }, 1600);
+      };
+
+      var fallback = function () {
+        // Caminho alternativo para file:// sem API de área de transferência.
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.top = "-1000px";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); done(); }
+        catch (e) { btn.textContent = "Falhou"; window.setTimeout(function(){ btn.textContent = "Copiar"; }, 1600); }
+        document.body.removeChild(ta);
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+
+  /* -- alternância do sumário em telas estreitas -------------------------- */
+  var toggle = document.getElementById("navToggle");
+  var sidebar = document.getElementById("sidebar");
+  if (toggle && sidebar) {
+    toggle.addEventListener("click", function () {
+      var open = sidebar.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    sidebar.addEventListener("click", function (ev) {
+      if (ev.target.tagName === "A" && window.matchMedia("(max-width: 62rem)").matches) {
+        sidebar.classList.remove("open");
+        toggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  /* -- realce da seção corrente ------------------------------------------ */
+  var links = Array.prototype.slice.call(document.querySelectorAll(".sidebar nav a"));
+  var targets = links
+    .map(function (a) { return document.querySelector(a.getAttribute("href")); })
+    .filter(Boolean);
+
+  if ("IntersectionObserver" in window && targets.length) {
+    var visible = new Map();
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        visible.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0);
+      });
+      var bestId = null, bestRatio = 0;
+      visible.forEach(function (ratio, id) {
+        if (ratio > bestRatio) { bestRatio = ratio; bestId = id; }
+      });
+      if (bestId) {
+        links.forEach(function (a) {
+          a.classList.toggle("active", a.getAttribute("href") === "#" + bestId);
+        });
+      }
+    }, { rootMargin: "0px 0px -70% 0px", threshold: [0, 0.25, 0.5, 1] });
+
+    targets.forEach(function (t) { observer.observe(t); });
+  }
+})();
+</script>
+
+</body>
+</html>
