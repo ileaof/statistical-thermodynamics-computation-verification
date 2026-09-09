@@ -1795,6 +1795,356 @@ statthermopy airtransport --T 300 --P 101325 --rh 0.50</code></pre>
   preservados corretamente, de modo que <code>export csv C:\dados\n2.csv</code> funciona.
 </div>
 
+<h3>11.4 Ajuda embutida</h3>
+
+<p>O comando <code>help</code>, sem argumento, lista os comandos reconhecidos;
+<code>help &lt;comando&gt;</code> mostra a sintaxe detalhada de um deles.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; help
+&gt; help plot</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída de help</div>
+<pre>Documented commands (type help &lt;topic&gt;):
+========================================
+EOF  V       fluid   help      m        n           props
+P    exit    fluids  humidair  mixture  plot        quit
+T    export  gas     list      modes    properties  state
+
+Undocumented commands:
+======================
+airtransport  transport</pre>
+</div>
+
+<div class="callout note">
+  <span class="label"><code>transport</code> e <code>airtransport</code> existem</span>
+  Ambos aparecem sob <em>Undocumented commands</em> por um detalhe de implementação: suas
+  descrições estão dentro de uma expressão entre parênteses, e o módulo <code>cmd</code> do Python
+  não as reconhece como <em>docstring</em>. Os comandos funcionam normalmente — apenas
+  <code>help transport</code> não exibe texto. Consulte a Seção
+  <a href="#transporte">8</a> para a sintaxe completa.
+</div>
+
+<h3>11.5 Sessões completas do terminal interativo</h3>
+
+<p>As sessões a seguir foram executadas e suas saídas transcritas literalmente. Elas ilustram os
+padrões de uso mais frequentes.</p>
+
+<h4>Sessão 1 — estado com quantidade de matéria</h4>
+
+<p><strong>Objetivo.</strong> Avaliar 2,5 mol de metano a 500 K e 2 bar, conferindo antes as
+variáveis de estado definidas.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas CH4
+&gt; T = 500
+&gt; P = 200000
+&gt; n = 2.5
+&gt; state
+&gt; properties</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  selected: Molecule(name='CH4', formula='CH4', M=16.0425 g/mol, geometry=nonlinear)
+  T = 500.0
+  P = 200000.0
+  n = 2.5
+  gas: Molecule(name='CH4', formula='CH4', M=16.0425 g/mol, geometry=nonlinear)
+  State: T=500.0000 K  P=200000 Pa  V=5.196539e-02 m^3  n=2.5 mol  m=0.0401063 kg
+  Molar mass: 16.0425 g/mol
+  --- Molar (per mol) ---
+    U_m     =   14067.083296  J/mol
+    H_m     =   18224.314605  J/mol
+    S_m     =     201.320005  J/mol/K
+    A_m     =  -86592.919181  J/mol
+    G_m     =  -82435.687872  J/mol
+    Cv_m    =      38.027851  J/mol/K
+    Cp_m    =      46.342314  J/mol/K
+    gamma   =       1.218641  -
+    mu_m    =  -82435.687872  J/mol</pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <em>T</em> em K, <em>P</em> em Pa, <em>n</em> em mol.</p>
+
+<p><strong>Como interpretar.</strong> O comando <code>state</code> ecoa apenas as variáveis
+efetivamente definidas — útil para depurar uma sessão longa. Definidos <em>T</em>, <em>P</em> e
+<em>n</em>, o volume 5,1965 × 10⁻² m³ e a massa 0,0401 kg são <em>derivados</em>. Note que as
+propriedades continuam <strong>molares</strong>: não dependem de <em>n</em>, que afeta apenas
+<em>V</em> e <em>m</em>. <code>Cv_m</code> = 38,03 J/mol/K está bem acima do valor de rotor rígido
+não linear (3<em>R</em> ≈ 24,9), sinal de que os nove modos vibracionais do CH₄ já estão
+parcialmente excitados a 500 K.</p>
+
+<h4>Sessão 2 — estado definido por volume</h4>
+
+<p><strong>Objetivo.</strong> Fixar o volume em vez da pressão: 2 mol de argônio em 0,05 m³ a
+300 K.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas AR
+&gt; T = 300
+&gt; V = 0.05
+&gt; n = 2
+&gt; properties</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (trecho)</div>
+<pre>  selected: Molecule(name='Ar', formula='Ar', M=39.948 g/mol, geometry=monoatomic)
+  State: T=300.0000 K  P=99773.6 Pa  V=5.000000e-02 m^3  n=2 mol  m=0.079896 kg
+  Molar mass: 39.9480 g/mol
+  --- Molar (per mol) ---
+    U_m     =    3741.508178  J/mol
+    H_m     =    6235.846964  J/mol</pre>
+</div>
+
+<p><strong>Unidades de entrada.</strong> <em>V</em> em m³, <em>n</em> em mol.</p>
+
+<p><strong>Como interpretar.</strong> Com <em>T</em>, <em>V</em> e <em>n</em> fixados, a pressão
+passa a ser a grandeza derivada: <em>P</em> = <em>nRT</em>/<em>V</em> = 2 × 8,3145 × 300 / 0,05 =
+99 774 Pa, exatamente o valor reportado. <em>U</em> = 3741,5 J/mol = 3<em>RT</em>/2 confirma o gás
+monoatômico, sem contribuições rotacional ou vibracional.</p>
+
+<h4>Sessão 3 — comparando espécies na mesma sessão</h4>
+
+<p><strong>Objetivo.</strong> Comparar os haletos de hidrogênio HCl, HBr e HI a 1000 K e 1 atm. O
+estado permanece definido ao trocar de gás, o que torna a comparação imediata.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; T = 1000
+&gt; P = 101325
+&gt; gas HCl
+&gt; properties
+&gt; gas HBr
+&gt; properties
+&gt; gas HI
+&gt; properties</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (linhas selecionadas)</div>
+<pre>  selected: Molecule(name='HCl', formula='HCl', M=36.4609 g/mol, geometry=linear)
+    S_m     =     222.454477  J/mol/K
+    Cp_m    =      31.240366  J/mol/K
+  selected: Molecule(name='HBr', formula='HBr', M=80.9119 g/mol, geometry=linear)
+    S_m     =     234.560121  J/mol/K
+    Cp_m    =      31.894348  J/mol/K
+  selected: Molecule(name='HI', formula='HI', M=127.9124 g/mol, geometry=linear)
+    S_m     =     242.889142  J/mol/K
+    Cp_m    =      32.663399  J/mol/K</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A entropia cresce monotonicamente de HCl para HI
+(222,5 → 234,6 → 242,9 J/mol/K), acompanhando a massa molar (36,5 → 80,9 → 127,9 g/mol): a
+contribuição translacional escala com ln <em>M</em><sup>3/2</sup>. <em>C<sub>p</sub></em> também
+sobe, porém pouco, porque a ligação enfraquece de HCl (2991 cm⁻¹) para HI (2309 cm⁻¹) e o modo
+vibracional se excita mais cedo. Trocar de gás <strong>preserva</strong> <em>T</em> e <em>P</em>,
+mas descarta qualquer mistura previamente definida.</p>
+
+<h4>Sessão 4 — mistura em base mássica</h4>
+
+<p><strong>Objetivo.</strong> Definir uma mistura por frações de <em>massa</em> (75 % N₂, 25 % O₂)
+a 350 K e 1 atm.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; mixture N2:0.75 O2:0.25 mass
+&gt; T = 350
+&gt; P = 101325
+&gt; properties</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (trecho)</div>
+<pre>  mixture (mass): IdealGasMixture(N2=0.7741, O2=0.2259)
+  Mixture (mass): N2=0.7741, O2=0.2259
+  T=350.0000 K  P=101325 Pa  M_avg=28.9137 g/mol  R_specific=287.5615 J/kg/K
+    Cp_m     =      29.257878  J/mol/K
+    S_mixing =       4.442172  J/mol/K</pre>
+</div>
+
+<div class="callout warn">
+  <span class="label">As frações exibidas são molares</span>
+  A palavra <code>mass</code> descreve a base da <em>entrada</em>. Os valores mostrados
+  (N₂ = 0,7741, O₂ = 0,2259) já são as frações <strong>molares</strong> convertidas:
+  <em>x</em>(N₂) = (0,75/28,0134) / (0,75/28,0134 + 0,25/31,9988) = 0,7741. Confira sempre o
+  rótulo antes de comparar composições.
+</div>
+
+<p><strong>Como interpretar.</strong> A composição resultante é muito próxima da do ar
+(<em>M̄</em> = 28,914 contra 28,966 g/mol), o que explica <code>R_specific</code> = 287,56 J/kg/K,
+quase idêntico ao valor do ar. Omitir a palavra <code>mass</code> faria as mesmas frações serem
+lidas como molares, resultando em outra mistura.</p>
+
+<h4>Sessão 5 — transporte de um gás poliatômico</h4>
+
+<p><strong>Objetivo.</strong> Obter as propriedades de transporte do CO₂ a 400 K, para contrastar
+com o N₂ da Seção <a href="#transporte">8</a>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; T = 400
+&gt; P = 101325
+&gt; gas CO2
+&gt; transport</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (trecho)</div>
+<pre>  Transport properties — CO2 @ T=400.0000 K, P=101325 Pa
+    mu       =    1.95558e-05  Pa·s
+    k        =      0.0229089  W/m/K
+    alpha    =    1.82675e-05  m^2/s
+    Pr       =        0.79841  -
+    a        =         307.73  m/s
+    beta     =         0.0025  1/K</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> <em>Pr</em> = 0,798, contra 0,737 do N₂: a correção de Eucken
+faz o número de Prandtl crescer com o número de graus de liberdade internos, e o CO₂ tem quatro
+modos vibracionais contra um do N₂. A velocidade do som (307,7 m/s) é menor que a do N₂ a 300 K
+(353,0 m/s), apesar da temperatura mais alta, porque o CO₂ é mais pesado e tem γ menor. Note ainda
+β = 1/<em>T</em> = 0,0025 1/K, a assinatura exata do gás ideal.</p>
+
+<h4>Sessão 6 — ar seco contra ar saturado</h4>
+
+<p><strong>Objetivo.</strong> Medir o efeito da umidade sobre o transporte do ar a 320 K, no caso
+extremo de saturação.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; T = 320
+&gt; P = 101325
+&gt; airtransport
+&gt; airtransport humid sat</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (linhas selecionadas)</div>
+<pre>  Air transport — Dry air @ T=320.0000 K, P=101325 Pa
+    Dynamic viscosity              =    1.92299e-05  Pa·s
+    Thermal conductivity           =      0.0262095  W/m/K
+    Density                        =        1.10312  kg/m^3
+  Air transport — Humid air @ T=320.0000 K, P=101325 Pa, humidity ratio w=7.1954e-02 kg/kg
+    Dynamic viscosity              =    1.84295e-05  Pa·s
+    Thermal conductivity           =      0.0263795  W/m/K
+    Density                        =        1.05987  kg/m^3</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A 320 K (46,85 °C) o ar saturado carrega
+<em>w</em> = 7,1954 × 10⁻² kg/kg, ou seja, <strong>71,95 g de vapor por kg de ar seco</strong> —
+mais que o dobro dos ≈ 30 g/kg a 305 K, porque <em>P</em><sub>sat</sub> cresce quase
+exponencialmente. O efeito no transporte é substancial: a viscosidade cai 4,2 % e a densidade
+cai 3,9 %, enquanto a condutividade térmica sobe ligeiramente. A palavra <code>sat</code>
+dispensa informar a umidade.</p>
+
+<h4>Sessão 7 — três especificações de umidade</h4>
+
+<p><strong>Objetivo.</strong> Comparar, na mesma (<em>T</em>, <em>P</em>), o estado saturado, um
+estado a 30 % de umidade relativa e outro fixado pela razão de umidade.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; T = 298.15
+&gt; P = 101325
+&gt; humidair
+&gt; humidair rh=0.3
+&gt; humidair w=0.008</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (linhas selecionadas)</div>
+<pre>  Statistical Humid Air — SATURATED (maximum solubility)
+    relative_humidity     =       1.000000
+    humidity_ratio        =      20.055185  g/kg dry air
+    dew_point             =     298.1500  K (25.00 C)
+    wet_bulb              =     298.1500  K (25.00 C)
+
+  Statistical Humid Air — moist air
+    relative_humidity     =       0.300000
+    humidity_ratio        =       5.883747  g/kg dry air
+    dew_point             =     279.3724  K (6.22 C)
+    wet_bulb              =     287.5623  K (14.41 C)
+
+  Statistical Humid Air — moist air
+    relative_humidity     =       0.406533
+    humidity_ratio        =       8.000000  g/kg dry air
+    dew_point             =     283.8551  K (10.71 C)
+    wet_bulb              =     289.4648  K (16.31 C)</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> No estado saturado, orvalho e bulbo úmido coincidem com o
+bulbo seco (25,00 °C) — a definição de saturação. Com <em>RH</em> = 0,30, o orvalho cai para
+6,22 °C. A terceira linha é a verificação de unidades: a entrada <code>w=0.008</code> está em
+<strong>kg/kg</strong> e o relatório a devolve como <strong>8,000000 g/kg</strong> — a mesma
+grandeza, a conversão por 1000 aplicada uma única vez. Esse estado corresponde a
+<em>RH</em> = 0,4065, valor <em>calculado</em>, e não imposto.</p>
+
+<h4>Sessão 8 — estudo completo com gráficos e exportação</h4>
+
+<p><strong>Objetivo.</strong> Um fluxo de trabalho típico de ponta a ponta: selecionar a espécie,
+inspecionar os modos, gerar curvas e gravar a tabela de resultados.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; gas N2
+&gt; T = 298.15
+&gt; P = 101325
+&gt; properties
+&gt; modes
+&gt; plot Cp_m 200 2000 100 n2_cp.png
+&gt; transport
+&gt; transport mu 300 1500 100 n2_mu.png
+&gt; transport binary N2 O2
+&gt; export csv n2.csv
+&gt; export latex n2.tex
+&gt; quit</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (linhas selecionadas)</div>
+<pre>  selected: Molecule(name='N2', formula='N2', M=28.0134 g/mol, geometry=linear)
+  saved plot -&gt; n2_cp.png
+  saved plot -&gt; n2_mu.png
+  D(N2,O2) @ T=298.15 K, P=1.013e+05 Pa = 2.042230e-05 m^2/s
+  exported -&gt; n2.csv
+  exported -&gt; n2.tex
+  goodbye.</pre>
+</div>
+
+<p><strong>Arquivos gerados.</strong> <code>n2_cp.png</code>, <code>n2_mu.png</code>,
+<code>n2.csv</code> e <code>n2.tex</code>, todos no diretório de trabalho.</p>
+
+<p><strong>Como interpretar.</strong> A ordem importa: <code>export</code> grava o último
+resultado de <code>properties</code>, portanto <code>properties</code> deve vir antes. O mesmo
+resultado pode ser exportado em vários formatos sem recalcular. Encerre com <code>quit</code>,
+<code>exit</code> ou Ctrl-D.</p>
+
+<div class="callout note">
+  <span class="label">Automatizando uma sessão</span>
+  O terminal lê da entrada padrão, de modo que uma sessão inteira pode ser roteirizada. Em
+  <em>shell</em> POSIX:
+  <div class="codeblock" style="margin-top:.7rem;margin-bottom:0;">
+    <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>printf 'gas N2\nT = 298.15\nP = 101325\nproperties\nquit\n' | statthermopy</code></pre>
+  </div>
+</div>
+
 <div class="backtotop"><a href="#top">↑ Voltar ao topo</a></div>
 
 <!-- ----------------------------------------------------- 12. EXPORTAÇÃO -->
