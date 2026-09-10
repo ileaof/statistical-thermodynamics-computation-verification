@@ -26,6 +26,7 @@ public API.
 from __future__ import annotations
 
 from . import air, export, plots
+from .kernel import TransportKernel
 from .collision import collision_integral, omega_11, omega_22, t_star
 from .lennard_jones import (
     combine_epsilon_over_k,
@@ -45,6 +46,7 @@ from .transport import (
 
 __all__ = [
     "TransportCalculator",
+    "TransportKernel",
     "TransportProperties",
     "binary_diffusion",
     "self_diffusion",

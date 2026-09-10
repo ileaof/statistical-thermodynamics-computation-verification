@@ -44,6 +44,8 @@ empirical property correlation.
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 
 from ..constants import R
@@ -60,6 +62,7 @@ __all__ = ["HinderedRotor", "torsional_levels_kelvin"]
 _BASIS_HALF_WIDTH: int = 100
 
 
+@functools.lru_cache(maxsize=128)
 def torsional_levels_kelvin(
     rotation_constant_cm1: float,
     barrier_cm1: float,
@@ -81,7 +84,11 @@ def torsional_levels_kelvin(
     H[idx, idx + n_minima] = -V / 4.0
     H[idx + n_minima, idx] = -V / 4.0
     eig = np.linalg.eigvalsh(H)
-    return eig - eig[0]
+    ladder = eig - eig[0]
+    # The result is cached and therefore shared between every caller; freeze it so a stray
+    # in-place write cannot poison the cache for the rest of the process.
+    ladder.setflags(write=False)
+    return ladder
 
 
 class HinderedRotor(Mode):

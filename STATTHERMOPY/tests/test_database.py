@@ -111,3 +111,60 @@ def test_rotational_temperatures_to_moments():
     # round trip: theta = h^2/(8pi^2 I k) -> recompute theta from I
     from statthermopy.modes.rotational import rotational_temperature
     assert math.isclose(rotational_temperature(moments[0]), 2.878, rel_tol=1e-9)
+
+# --- YAML scalar-type integrity (regression for the NO boolean bug) -----------
+
+
+def test_species_names_are_strings_not_yaml_booleans():
+    """``NO`` is a YAML 1.1 boolean: unquoted, PyYAML turns it into ``False``.
+
+    That silently renamed the species to the string ``"False"`` everywhere it was labelled —
+    including the per-species keys of a mixture-transport report. Every species name and formula
+    must be the chemical symbol, and must round-trip against the registry key.
+    """
+    for key in list_molecules():
+        mol = get(key)
+        assert isinstance(mol.name, str), f"{key}: name is {type(mol.name).__name__}"
+        assert isinstance(mol.formula, str), f"{key}: formula is {type(mol.formula).__name__}"
+        assert mol.name.upper() == key, f"{key}: Molecule.name is {mol.name!r}"
+        assert mol.name not in ("True", "False", "None"), f"{key}: name parsed as a literal"
+
+
+def test_no_is_nitric_oxide_not_a_boolean():
+    """The specific case that broke: get("NO") must be nitric oxide."""
+    mol = get("NO")
+    assert mol.name == "NO"
+    assert mol.formula == "NO"
+    assert mol.molar_mass_gmol == pytest.approx(30.0061, abs=1e-4)
+
+
+def test_every_database_yaml_has_string_name_and_formula():
+    """Guard the raw files too, so a future species named ON/OFF/YES/N/Y cannot slip through."""
+    import yaml
+    from importlib import resources
+
+    data_dir = resources.files("statthermopy.database") / "data"
+    for entry in data_dir.iterdir():
+        if not entry.name.endswith(".yaml"):
+            continue
+        raw = yaml.safe_load(entry.read_text(encoding="utf-8"))
+        for field in ("name", "formula"):
+            assert isinstance(raw[field], str), (
+                f"{entry.name}: '{field}' parsed as {type(raw[field]).__name__} "
+                f"({raw[field]!r}) — quote it in the YAML"
+            )
+
+
+def test_validation_reference_species_names_are_strings():
+    """The same trap exists in the validation reference files."""
+    import yaml
+    from importlib import resources
+
+    data_dir = resources.files("statthermopy.validation") / "data"
+    for entry in data_dir.iterdir():
+        if not entry.name.endswith(".yaml"):
+            continue
+        raw = yaml.safe_load(entry.read_text(encoding="utf-8"))
+        assert isinstance(raw["species"], str), (
+            f"{entry.name}: 'species' parsed as {type(raw['species']).__name__}"
+        )

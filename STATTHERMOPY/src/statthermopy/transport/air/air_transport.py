@@ -74,7 +74,8 @@ class AirTransport:
 
     def dry(self, T: float, P: float, *, label: str = "Dry air"):
         """Dry-air transport properties at ``(T, P)``."""
-        calc = MixtureTransportCalculator(self.dry_air)
+        # H2O is the physically natural trace for air, so it is named explicitly.
+        calc = MixtureTransportCalculator(self.dry_air, trace="H2O")
         return calc.compute(State(T=float(T), P=float(P)), label=label)
 
     def humid(
@@ -107,7 +108,9 @@ class AirTransport:
             dew_point=False,
         )
         mix = self.humid_air._humid_mixture(ha.x_h2o)
-        res = MixtureTransportCalculator(mix).compute(State(T=T, P=P), label=label)
+        res = MixtureTransportCalculator(mix, trace="H2O").compute(
+            State(T=T, P=P), label=label
+        )
         res.humidity_ratio = ha.humidity_ratio
         return res
 

@@ -67,24 +67,47 @@ def _neufeld(Ts: float, c: dict) -> float:
     return c["A"] / math.pow(Ts, c["B"]) + c["C"] * math.exp(-c["D"] * Ts) + c["E"] * math.exp(-c["F"] * Ts)
 
 
-def omega_22(Ts: float) -> float:
-    """Dimensionless collision integral ``Ω^(2,2)*(T*)`` (viscosity, conductivity)."""
-    return _neufeld(Ts, _NEUFELD_22)
+def omega_22(Ts: float, delta: float = 0.0) -> float:
+    """Dimensionless collision integral ``Ω^(2,2)*(T*, δ)`` (viscosity, conductivity).
+
+    ``delta`` is the reduced dipole moment of the **Stockmayer** potential (LJ 12-6 plus a
+    point-dipole term). ``delta = 0`` is exactly the non-polar Lennard-Jones case, so every
+    existing call site keeps its result bit-for-bit.
+    """
+    return _neufeld(Ts, _NEUFELD_22) + _polar_correction(Ts, delta, 0.2)
 
 
-def omega_11(Ts: float) -> float:
-    """Dimensionless collision integral ``Ω^(1,1)*(T*)`` (diffusion)."""
-    return _neufeld(Ts, _NEUFELD_11)
+def omega_11(Ts: float, delta: float = 0.0) -> float:
+    """Dimensionless collision integral ``Ω^(1,1)*(T*, δ)`` (diffusion). See :func:`omega_22`."""
+    return _neufeld(Ts, _NEUFELD_11) + _polar_correction(Ts, delta, 0.19)
 
 
-def collision_integral(ell: int, s: int, Ts: float) -> float:
+def _polar_correction(Ts: float, delta: float, coeff: float) -> float:
+    """Brokaw's (1969) dipole correction ``coeff · δ² / T*`` to the LJ collision integral.
+
+    A permanent dipole deepens the attractive well, deflecting slow molecules more and raising
+    the collision integral — which *lowers* the transport coefficients. The correction is
+    ``0.2 δ²/T*`` for ``Ω^(2,2)*`` and ``0.19 δ²/T*`` for ``Ω^(1,1)*``, with
+
+        δ = μ_D² / (2 ε σ³)
+
+    the reduced dipole moment. It is a molecular-potential term, not a property correlation.
+    """
+    if delta <= 0.0:
+        return 0.0
+    if Ts <= 0.0:
+        Ts = 1.0e-6
+    return coeff * delta * delta / Ts
+
+
+def collision_integral(ell: int, s: int, Ts: float, delta: float = 0.0) -> float:
     """Dispatcher for the collision integral ``Ω^(l,s)*(T*)``.
 
     Only the two integrals required by the first-order Chapman–Enskog coefficients are
     implemented: ``(l, s) = (1, 1)`` and ``(2, 2)``.
     """
     if (ell, s) == (2, 2):
-        return omega_22(Ts)
+        return omega_22(Ts, delta)
     if (ell, s) == (1, 1):
-        return omega_11(Ts)
+        return omega_11(Ts, delta)
     raise ValueError(f"collision integral Ω^({ell},{s})* is not implemented; use (1,1) or (2,2).")

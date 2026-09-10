@@ -1,4 +1,4 @@
-species: NO
+species: "NO"
 source: "NIST Chemistry WebBook (webbook.nist.gov), Shomate equation coefficients for NO(g),
   evaluated at the T grid below. Standard state 1 bar. Curated 2026-07-31; refinable."
 pressure: 100000.0

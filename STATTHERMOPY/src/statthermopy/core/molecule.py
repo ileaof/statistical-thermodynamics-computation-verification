@@ -29,6 +29,7 @@ __all__ = [
     "InternalRotor",
     "ElectronicLevel",
     "LennardJones",
+    "Stockmayer",
     "Molecule",
 ]
 
@@ -202,6 +203,74 @@ class Anharmonicity:
 
 
 @dataclass(frozen=True)
+class Stockmayer:
+    """Stockmayer potential parameters — Lennard-Jones 12-6 plus a permanent point dipole.
+
+    A strongly polar molecule is poorly described by a spherically symmetric LJ potential: the
+    dipole–dipole term deepens the attraction, deflects slow molecules more, and therefore
+    *lowers* the transport coefficients. The Stockmayer potential adds that term, and its effect
+    on the collision integrals is carried by a single dimensionless group, the **reduced dipole
+    moment**
+
+    .. math:: \delta = rac{\mu_D^2}{2\,arepsilon\,\sigma^3}
+
+    which enters Brokaw's (1969) correction ``Ω*(T*, δ) = Ω*_LJ(T*) + c δ²/T*``.
+
+    These are *molecular potential* parameters, on the same footing as the LJ σ/ε — the dipole
+    moment is a molecular constant, not property data, so the engine stays first-principles.
+
+    Note that ``sigma_angstrom`` and ``epsilon_over_k`` here are the **Stockmayer** fit, which
+    differs from the LJ fit of the same species (they are obtained from the same data under a
+    different potential). Both are stored; the transport engine uses this set when present.
+
+    Attributes
+    ----------
+    sigma_angstrom : float
+        Stockmayer collision diameter σ (Å).
+    epsilon_over_k : float
+        Stockmayer well depth ε/k_B (K).
+    dipole_debye : float
+        Permanent electric dipole moment μ_D (debye).
+    reference : str
+        Provenance of the parameter set.
+    """
+
+    sigma_angstrom: float
+    epsilon_over_k: float
+    dipole_debye: float
+    reference: str = ""
+
+    #: μ_D² / (2 ε σ³) in practical units (debye, K, Å) — see :attr:`reduced_dipole`.
+    _DELTA_UNIT_FACTOR: float = 3621.7
+
+    def __post_init__(self) -> None:
+        if self.sigma_angstrom <= 0.0:
+            raise ValueError("Stockmayer sigma must be > 0 A.")
+        if self.epsilon_over_k <= 0.0:
+            raise ValueError("Stockmayer epsilon/k must be > 0 K.")
+        if self.dipole_debye < 0.0:
+            raise ValueError("Dipole moment must be >= 0 debye.")
+
+    @property
+    def sigma_m(self) -> float:
+        """Collision diameter in metres."""
+        return self.sigma_angstrom * 1.0e-10
+
+    @property
+    def reduced_dipole(self) -> float:
+        """Reduced dipole moment ``δ = μ_D²/(2 ε σ³)``, dimensionless.
+
+        Evaluated in practical units: ``δ = 3621.7 μ_D² / ((ε/k) σ³)`` with μ_D in debye,
+        ε/k in K and σ in Å. Water gives δ ≈ 1.0, the textbook value.
+        """
+        return (
+            self._DELTA_UNIT_FACTOR
+            * self.dipole_debye ** 2
+            / (self.epsilon_over_k * self.sigma_angstrom ** 3)
+        )
+
+
+@dataclass(frozen=True)
 class LennardJones:
     """Lennard–Jones 12-6 potential parameters for a species.
 
@@ -327,6 +396,7 @@ class Molecule:
     internal_rotors: tuple[InternalRotor, ...] = field(default_factory=tuple)
     electronic_levels: tuple[ElectronicLevel, ...] = field(default_factory=tuple)
     lennard_jones: LennardJones | None = None
+    stockmayer: Stockmayer | None = None
     anharmonicity: Anharmonicity | None = None
 
     def __post_init__(self) -> None:

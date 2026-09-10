@@ -206,10 +206,21 @@ class MixtureTransportProperties:
     """Full transport & thermophysical report for a gas mixture at one state.
 
     All quantities are SI. ``mu`` is the Wilke dynamic viscosity, ``k`` the Mason–Saxena thermal
-    conductivity, ``D_eff`` the water-vapour diffusivity in the mixture (Blanc), ``Pr``/``Sc``/``Le``
-    the mixture Prandtl/Schmidt/Lewis numbers, ``a`` the speed of sound, ``beta`` the thermal-
-    expansion coefficient, ``kappa_T`` the isothermal compressibility. ``components`` carries the
-    per-species :class:`SpeciesTransportContribution` breakdown.
+    conductivity, ``a`` the speed of sound, ``beta`` the thermal-expansion coefficient,
+    ``kappa_T`` the isothermal compressibility. ``components`` carries the per-species
+    :class:`SpeciesTransportContribution` breakdown.
+
+    **Mixture scalars vs per-species quantities.** ``mu``, ``k``, ``rho``, ``alpha``, ``gamma``
+    and ``Pr = μ c_p / k`` are properties *of the mixture* — single numbers. Diffusion is not:
+    ``D_i,m``, and therefore the Schmidt and Lewis numbers built on it, are defined **per
+    species**. They are reported in the ``D_im``, ``Sc_i`` and ``Le_i`` dictionaries, keyed by
+    species name.
+
+    ``D_eff``, ``Sc`` and ``Le`` are the single-species view for the one species named by
+    ``trace_species``. They are ``None`` unless a trace was requested — a generic mixture has no
+    natural trace, and silently defaulting to H₂O would report water diffusing through a mixture
+    that may contain none. :class:`~statthermopy.transport.air.AirTransport` asks for ``"H2O"``
+    explicitly, where it *is* the physically natural choice.
     """
 
     # conditions
@@ -225,11 +236,17 @@ class MixtureTransportProperties:
     nu: float                         # m^2/s
     k: float                         # W/m/K
     alpha: float                     # m^2/s
-    D_eff: float                      # m^2/s (water vapour in the mixture)
-    # dimensionless groups
+    # per-species diffusion (name -> value); diffusion is never a single mixture scalar
+    D_im: dict                        # m^2/s, species i into the rest of the mixture (Blanc)
+    Sc_i: dict                        # nu / D_i,m
+    Le_i: dict                        # alpha / D_i,m
+    # single-species view, only when a trace species was requested (else None)
+    trace_species: str | None
+    D_eff: float | None               # m^2/s — D_im[trace]
+    Sc: float | None                  # Sc_i[trace]
+    Le: float | None                  # Le_i[trace]
+    # dimensionless group of the mixture itself
     Pr: float
-    Sc: float
-    Le: float
     # thermophysical (ideal-gas EOS of the mixture)
     Z: float
     a: float                          # m/s
@@ -251,6 +268,42 @@ class MixtureTransportProperties:
         d = asdict(self)
         return d
 
+    # -- per-species accessors -------------------------------------------------
+
+    def effective_diffusivity(self, species: str) -> float:
+        """Blanc diffusivity ``D_i,m`` of one species into the rest of the mixture (m²/s)."""
+        return self._per_species(self.D_im, species, "effective diffusivity")
+
+    def schmidt_number(self, species: str) -> float:
+        """Schmidt number ``Sc_i = ν / D_i,m`` of one species."""
+        return self._per_species(self.Sc_i, species, "Schmidt number")
+
+    def lewis_number(self, species: str) -> float:
+        """Lewis number ``Le_i = α / D_i,m`` of one species."""
+        return self._per_species(self.Le_i, species, "Lewis number")
+
+    def effective_diffusivities(self) -> dict:
+        """``{species: D_i,m}`` for every component."""
+        return dict(self.D_im)
+
+    def schmidt_numbers(self) -> dict:
+        """``{species: Sc_i}`` for every component."""
+        return dict(self.Sc_i)
+
+    def lewis_numbers(self) -> dict:
+        """``{species: Le_i}`` for every component."""
+        return dict(self.Le_i)
+
+    def _per_species(self, table: dict, species: str, what: str) -> float:
+        key = {k.upper(): k for k in table}.get(str(species).upper())
+        if key is None:
+            raise KeyError(
+                f"{what} requested for {species!r}, which is not a component of this mixture "
+                f"({', '.join(table) or 'none'}). Pass a trace species to the calculator to get "
+                f"the diffusivity of a species that is not itself present."
+            )
+        return table[key]
+
 
 # -- calculator ---------------------------------------------------------------
 
@@ -262,10 +315,12 @@ class MixtureTransportCalculator:
     ----------
     mixture : IdealGasMixture
         The gas mixture (dry air, humid air, or any custom ideal-gas composition).
-    trace : str, default ``"H2O"``
-        The species whose diffusivity into the mixture is reported as :attr:`.D_eff` (the
-        "water-vapour diffusivity in air"). If the trace is absent from the mixture it is treated
-        as an external diffusing species diffusing into the mixture background.
+    trace : str or None, default ``None``
+        Species for which the single-value :attr:`.D_eff`, :attr:`.Sc` and :attr:`.Le` are
+        reported. ``None`` — the generic default — leaves those three ``None`` and reports
+        diffusion only per species, in :attr:`.D_im` / :attr:`.Sc_i` / :attr:`.Le_i`. A generic
+        mixture has no natural trace, so none is assumed. When a trace *is* named and is absent
+        from the mixture, it is treated as an external species diffusing into the background.
 
     Notes
     -----
@@ -277,7 +332,7 @@ class MixtureTransportCalculator:
     is used in the calculation path.
     """
 
-    def __init__(self, mixture: IdealGasMixture, *, trace: str = "H2O") -> None:
+    def __init__(self, mixture: IdealGasMixture, *, trace: str | None = None) -> None:
         self.mixture = mixture
         self.trace = trace
 
@@ -338,8 +393,12 @@ class MixtureTransportCalculator:
         for i in range(n):
             D_im[i] = blanc_diffusion(i, xs, D_pairs)
 
-        # water-vapour diffusivity in the mixture (the headline D_eff)
-        D_eff = self._trace_diffusivity(items, xs, D_pairs, T, P)
+        # trace diffusivity, only when a trace species was explicitly requested
+        D_eff = (
+            self._trace_diffusivity(items, xs, D_pairs, T, P)
+            if self.trace is not None
+            else None
+        )
 
         # density and per-density derivatives (ideal-gas EOS of the mixture)
         if T > 0.0 and P > 0.0:
@@ -351,10 +410,16 @@ class MixtureTransportCalculator:
             nu = 0.0
             alpha = 0.0
 
-        # dimensionless groups (mixture — direct forms, finite at every T)
+        # Pr is a mixture scalar; Sc and Le are per-species because D is.
         Pr = (mu_mix * cp_s / k_mix) if k_mix > 0.0 else 0.0
-        Sc = (nu / D_eff) if D_eff > 0.0 else 0.0
-        Le = (Sc / Pr) if Pr != 0.0 else 0.0
+        D_im_map = {name: D_im[i] for i, name in enumerate(names)}
+        Sc_i_map = {n_: (nu / d if d > 0.0 else 0.0) for n_, d in D_im_map.items()}
+        Le_i_map = {n_: (alpha / d if d > 0.0 else 0.0) for n_, d in D_im_map.items()}
+        if D_eff is not None and D_eff > 0.0:
+            Sc = nu / D_eff
+            Le = (Sc / Pr) if Pr != 0.0 else 0.0
+        else:
+            Sc = Le = None if D_eff is None else 0.0
 
         # thermophysical (ideal-gas EOS — exact for this engine)
         Z = 1.0
@@ -377,11 +442,13 @@ class MixtureTransportCalculator:
             T=T, P=P, label=label, basis=mix.basis,
             x={name: xi for name, xi in zip(names, xs, strict=False)},
             M_avg=M_avg, humidity_ratio=None,
-            mu=mu_mix, nu=nu, k=k_mix, alpha=alpha, D_eff=D_eff,
-            Pr=Pr, Sc=Sc, Le=Le,
+            mu=mu_mix, nu=nu, k=k_mix, alpha=alpha,
+            D_im=D_im_map, Sc_i=Sc_i_map, Le_i=Le_i_map,
+            trace_species=self.trace, D_eff=D_eff, Sc=Sc, Le=Le,
+            Pr=Pr,
             Z=Z, a=a, beta=beta, kappa_T=kappa_T,
             rho=rho, gamma=gamma, cv_s=cv_s, cp_s=cp_s, R_specific=R_specific,
-            mixing_rules={"mu": "Wilke", "k": "Mason-Saxena", "D_eff": "Blanc"},
+            mixing_rules={"mu": "Wilke", "k": "Mason-Saxena", "D_im": "Blanc"},
             components=components,
         )
 

@@ -43,6 +43,7 @@ from ..core.molecule import (
     InternalRotor,
     LennardJones,
     Molecule,
+    Stockmayer,
     VibrationalMode,
 )
 
@@ -102,6 +103,16 @@ def load_molecule(data: dict) -> Molecule:
             note=str(lj_data.get("note", "")),
         )
 
+    sm_block = data.get("stockmayer")
+    stockmayer = None
+    if sm_block:
+        stockmayer = Stockmayer(
+            sigma_angstrom=float(sm_block["sigma_angstrom"]),
+            epsilon_over_k=float(sm_block["epsilon_over_k"]),
+            dipole_debye=float(sm_block["dipole_debye"]),
+            reference=str(sm_block.get("reference", "")),
+        )
+
     anh_block = data.get("anharmonicity")
     anharmonicity = None
     if anh_block:
@@ -127,6 +138,7 @@ def load_molecule(data: dict) -> Molecule:
         internal_rotors=rotors,
         electronic_levels=elec_levels,
         lennard_jones=lennard_jones,
+        stockmayer=stockmayer,
         anharmonicity=anharmonicity,
     )
 

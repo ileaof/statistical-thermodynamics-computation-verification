@@ -461,7 +461,9 @@ def test_airtransport_humid_matches_full_state_path():
     # reference: full state (with dew point), same composition -> same transport
     ha = HumidAir().state(T0, P0, relative_humidity=0.5, wet_bulb=False, dew_point=True)
     mix = HumidAir()._humid_mixture(ha.x_h2o)
-    ref = MixtureTransportCalculator(mix).compute(State(T=T0, P=P0))
+    # AirTransport names H2O as the trace; the reference path must ask for the same one, since
+    # the generic calculator no longer assumes a trace species.
+    ref = MixtureTransportCalculator(mix, trace="H2O").compute(State(T=T0, P=P0))
     for prop in ("mu", "nu", "k", "alpha", "D_eff", "Pr", "Sc", "Le", "rho"):
         assert getattr(fast, prop) == pytest.approx(getattr(ref, prop), rel=1e-12)
     assert fast.humidity_ratio == pytest.approx(ha.humidity_ratio, rel=1e-12)

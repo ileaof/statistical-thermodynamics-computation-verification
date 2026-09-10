@@ -115,17 +115,37 @@ class IdealGasMixture:
         ``"mole"`` or ``"mass"``.
     """
 
+    #: Fractions at or below this are treated as species that are simply not present. It is an
+    #: exact-zero guard, not a physical cutoff: anything strictly positive is kept, however small.
+    ZERO_FRACTION: float = 0.0
+
     def __init__(self, components: dict[Molecule, float], *, basis: str = "mole") -> None:
         if basis not in ("mole", "mass"):
             raise ValueError("basis must be 'mole' or 'mass'.")
         if not components:
             raise ValueError("At least one component is required.")
+        negative = [mol.name for mol, v in components.items() if v < 0.0]
+        if negative:
+            raise ValueError(f"Fractions must be >= 0; negative for {', '.join(negative)}.")
         self.basis = basis
-        # normalize and store
         total = sum(components.values())
         if total <= 0:
             raise ValueError("Fractions must sum to a positive number.")
-        self._input = {mol: v / total for mol, v in components.items()}
+
+        # A component with a zero fraction is *absent*, not infinitely dilute: its partial
+        # pressure would be zero and its molar entropy would diverge, yet every extensive
+        # contribution x_i·(...) has limit zero (including -R x ln x). Dropping it here makes
+        # {"N2": 1.0, "H2O": 0.0} numerically identical to {"N2": 1.0} everywhere downstream —
+        # transport included — so a composition sweep can run continuously through x = 0.
+        # Nothing is substituted by an epsilon; strictly positive fractions are always kept.
+        self.inactive: tuple[str, ...] = tuple(
+            mol.name for mol, v in components.items() if v <= self.ZERO_FRACTION
+        )
+        active = {mol: v for mol, v in components.items() if v > self.ZERO_FRACTION}
+        if not active:
+            raise ValueError("At least one component must have a positive fraction.")
+
+        self._input = {mol: v / total for mol, v in active.items()}
         self.x = self._mole_fractions()
 
     # -- construction helpers --------------------------------------------------

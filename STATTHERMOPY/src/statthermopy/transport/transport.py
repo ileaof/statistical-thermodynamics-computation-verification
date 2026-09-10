@@ -169,17 +169,30 @@ class TransportCalculator:
     def _resolved(self) -> ResolvedState:
         return self.state.resolve(self.molecule.molar_mass)
 
+    def _potential(self) -> tuple[float, float, float]:
+        """Return ``(sigma_m, epsilon_over_k, delta)`` for this species.
+
+        A species carrying :class:`~statthermopy.core.molecule.Stockmayer` parameters is treated
+        with the polar potential — its own σ/ε fit plus the reduced dipole δ. Otherwise the
+        Lennard-Jones set is used with ``δ = 0``, which is the same expression, so a non-polar
+        species is unaffected bit-for-bit.
+        """
+        sm = self.molecule.stockmayer
+        if sm is not None:
+            return sm.sigma_m, sm.epsilon_over_k, sm.reduced_dipole
+        lj = self.molecule.lennard_jones
+        return lj.sigma_m, lj.epsilon_over_k, 0.0
+
     # -- primary Chapman–Enskog coefficients -----------------------------------
 
     def viscosity(self, T: float) -> float:
         """Dynamic viscosity ``μ(T)`` (Pa·s). Pressure-independent (dilute gas)."""
         if T <= 0.0:
             return 0.0
-        lj = self.molecule.lennard_jones
+        sigma, eps_k, delta = self._potential()
         m = self.molecule.molecular_mass
-        sigma = lj.sigma_m
-        Ts = t_star(T, lj.epsilon_over_k)
-        omega = omega_22(Ts)
+        Ts = t_star(T, eps_k)
+        omega = omega_22(Ts, delta)
         return (5.0 / 16.0) * math.sqrt(m * k_B * T / math.pi) / (sigma * sigma * omega)
 
     def conductivity(self, T: float, mu: float | None = None) -> float:
@@ -197,11 +210,10 @@ class TransportCalculator:
         """Self-diffusion coefficient ``D_self = D_ii`` (m²/s)."""
         if T <= 0.0 or P <= 0.0:
             return 0.0
-        lj = self.molecule.lennard_jones
+        sigma, eps_k, delta = self._potential()
         m = self.molecule.molecular_mass
-        sigma = lj.sigma_m
-        Ts = t_star(T, lj.epsilon_over_k)
-        omega = omega_11(Ts)
+        Ts = t_star(T, eps_k)
+        omega = omega_11(Ts, delta)
         m_ii = 0.5 * m  # reduced mass of an identical pair
         return (3.0 / 16.0) * (k_B * T / P) * (1.0 / (sigma * sigma * omega)) \
             * math.sqrt(2.0 * k_B * T / (math.pi * m_ii))
@@ -213,8 +225,8 @@ class TransportCalculator:
         rs = self._resolved()
         T, P = rs.T, rs.P
         M = self.molecule.molar_mass
-        lj = self.molecule.lennard_jones
-        Ts = t_star(T, lj.epsilon_over_k) if T > 0.0 else 0.0
+        _sigma, eps_k, delta = self._potential()
+        Ts = t_star(T, eps_k) if T > 0.0 else 0.0
 
         # heat capacities / gamma from the statistical-mechanics engine (one evaluation)
         th = Thermodynamics(self.molecule, self.state).compute()
@@ -241,8 +253,8 @@ class TransportCalculator:
         # dimensionless groups — closed forms, finite at every T (including T = 0)
         Pr = 4.0 * gamma / (9.0 * gamma - 5.0)
         # Sc = ν/D_self = (5/6) Ω11/Ω22 for self-diffusion (exact; avoids 0/0 at T = 0)
-        o11 = omega_11(Ts) if T > 0.0 else omega_11(0.0)
-        o22 = omega_22(Ts) if T > 0.0 else omega_22(0.0)
+        o11 = omega_11(Ts, delta) if T > 0.0 else omega_11(0.0, delta)
+        o22 = omega_22(Ts, delta) if T > 0.0 else omega_22(0.0, delta)
         Sc = (5.0 / 6.0) * (o11 / o22)
         Le = Sc / Pr if Pr != 0.0 else 0.0
 
