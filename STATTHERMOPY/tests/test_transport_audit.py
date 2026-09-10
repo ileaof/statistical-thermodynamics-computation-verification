@@ -405,3 +405,104 @@ class TestStockmayerPolarPotential:
         assert humid.mu < dry.mu       # water vapour is the least viscous component
         assert humid.k < dry.k         # and, at 300 K, the less conductive one
         assert humid.rho < dry.rho     # and the lightest
+
+
+# ------------------------------------- Phase 2b: rotational relaxation (Mason-Monchick)
+
+
+class TestMasonMonchickConductivity:
+    """Rotational relaxation refines k where its central assumption holds.
+
+    Mason & Monchick (1962) scale the rotational contribution by the *mass*-diffusion rate
+    rho*D/mu. That is right for a non-polar molecule and wrong for a strongly polar one, where
+    resonant dipole-dipole exchange moves rotational quanta without moving molecules. Measured
+    over the four polar species, applying it makes their error worse by an amount that grows
+    with the reduced dipole (r = 0.90). Polar species therefore keep Eucken.
+
+    Z_rot comes from ultrasonic relaxation, independent of any conductivity data.
+    """
+
+    MM_SPECIES = ["H2", "N2", "O2", "CO", "NO", "Cl2", "CO2", "N2O", "CH4", "C2H4", "C2H6"]
+    POLAR = ["H2O", "NH3", "SO2", "H2S"]
+
+    def test_only_the_intended_species_declare_a_collision_number(self):
+        declared = sorted(
+            n for n in list_molecules() if get(n).rotational_relaxation is not None
+        )
+        assert declared == sorted(get(s).name.upper() for s in self.MM_SPECIES)
+
+    def test_polar_species_keep_eucken(self):
+        """Their k would get worse under Mason-Monchick, for a stated physical reason."""
+        for name in self.POLAR:
+            assert get(name).rotational_relaxation is None, name
+
+    def test_monatomics_keep_eucken(self):
+        for name in ("He", "Ne", "Ar", "Kr", "Xe"):
+            assert get(name).rotational_relaxation is None, name
+
+    def test_parker_scaling_increases_z_rot_with_temperature(self):
+        rr = get("N2").rotational_relaxation
+        eps = get("N2").lennard_jones.epsilon_over_k
+        assert rr.z_rot(298.15, eps) == pytest.approx(rr.z_rot_298, rel=1e-12)
+        assert rr.z_rot(1000.0, eps) > rr.z_rot(300.0, eps)
+
+    @pytest.mark.parametrize(
+        "name,k_ref,tol",
+        [("N2", 0.0260, 0.03), ("O2", 0.0266, 0.03), ("H2", 0.187, 0.03),
+         ("Cl2", 0.00895, 0.04), ("CH4", 0.0343, 0.06)],
+    )
+    def test_conductivity_of_the_refined_species(self, name, k_ref, tol):
+        k = TransportCalculator(get(name), State(T=T0, P=P0)).compute().k
+        assert abs(k - k_ref) / k_ref < tol, f"k({name}) off by more than {tol:.0%}"
+
+    def test_nitrogen_conductivity_beats_the_eucken_value(self):
+        """Eucken gave -4.0 %; Mason-Monchick gives -0.7 %."""
+        k = TransportCalculator(get("N2"), State(T=T0, P=P0)).compute().k
+        assert abs(k - 0.0260) / 0.0260 < 0.02
+
+    def test_prandtl_of_air_matches_literature(self):
+        """The headline consequence: Pr(dry air) was +4.3 % off, now under 1 %."""
+        from statthermopy.transport.air import AirTransport
+
+        Pr = AirTransport().dry(T0, P0).Pr
+        assert abs(Pr - 0.707) / 0.707 < 0.02
+
+    def test_air_conductivity_improved(self):
+        from statthermopy.transport.air import AirTransport
+
+        k = AirTransport().dry(T0, P0).k
+        assert abs(k - 0.0263) / 0.0263 < 0.03
+
+    def test_monatomic_limit_collapses_to_chapman_enskog(self):
+        """With no internal modes the Mason-Monchick expression is the exact CE result."""
+        import math
+
+        from statthermopy.constants import R
+
+        mol = get("Ar")
+        r = TransportCalculator(mol, State(T=T0, P=P0)).compute()
+        exact = (15.0 / 4.0) * (R / mol.molar_mass) * r.mu
+        assert r.k == pytest.approx(exact, rel=1e-12)
+        assert math.isfinite(r.k)
+
+    def test_species_without_a_record_are_bit_for_bit_unchanged(self):
+        """Eucken species must not shift: k = mu*cv*(9g-5)/4 exactly."""
+        from statthermopy import Thermodynamics
+
+        for name in list_molecules():
+            mol = get(name)
+            if mol.rotational_relaxation is not None:
+                continue
+            r = TransportCalculator(mol, State(T=T0, P=P0)).compute()
+            th = Thermodynamics(mol, State(T=T0, P=P0)).compute()
+            expected = r.mu * (th.Cv_m / mol.molar_mass) * (9.0 * th.gamma - 5.0) / 4.0
+            assert r.k == expected, name
+
+    def test_conductivity_stays_positive_and_monotonic_in_temperature(self):
+        for name in self.MM_SPECIES:
+            ks = [
+                TransportCalculator(get(name), State(T=T, P=P0)).compute().k
+                for T in (250.0, 300.0, 500.0, 1000.0)
+            ]
+            assert all(k > 0 for k in ks), name
+            assert ks == sorted(ks), f"k({name}) not increasing with T"

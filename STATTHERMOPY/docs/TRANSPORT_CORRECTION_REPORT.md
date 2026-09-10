@@ -21,13 +21,26 @@ substituídos.
 | Erro de μ(H₂O) a 300 K | +9,8 % | **+2,3 %** |
 | Erro de k(H₂O) a 300 K | +33,7 % | **+24,5 %** |
 | k(H₂O) vs k(ar) a 300 K | invertido (H₂O acima) | ordenamento correto |
+| Erro médio de k (20 espécies) | 6,6 % | **5,1 %** |
+| Erro de k(ar seco) | −5,0 % | **−1,7 %** |
+| Erro de Pr(ar seco) | +4,3 % | **+0,9 %** |
 | Mistura de 30 componentes | 81 ms/ponto | **13,2 ms/ponto** |
 | Caminho vetorizado | inexistente | **310 000 pontos/s** (5 espécies) |
-| Testes | 545 | **646** |
+| Testes | 545 | **662** |
 
-Um resultado **negativo** também foi estabelecido por medição: o Eucken modificado, hipótese
-natural para melhorar k, **piora** o conjunto (6,6 % → 10,3 %). Não foi adotado. Ver §THERMAL
-CONDUCTIVITY ACCURACY.
+Dois resultados **negativos** foram estabelecidos por medição, e ambos importam mais que os
+positivos:
+
+* o **Eucken modificado**, hipótese natural para melhorar k, **piora** o conjunto
+  (6,6 % → 10,3 %). Não adotado.
+* **Mason–Monchick não resolve o problema polar** para o qual foi proposto — ele o agrava, e a
+  degradação escala com o dipolo (r = 0,90). O problema de k(H₂O) **permanece aberto**. O que
+  Mason–Monchick resolve é outro: a condutividade das espécies não polares, e por consequência o
+  número de Prandtl.
+
+Uma afirmação do relatório anterior também foi retratada: eu havia declarado Mason–Monchick
+inviável por exigir ajuste empírico de Z_rot. **Isso estava errado** — Z_rot é medido por
+relaxação acústica, independentemente de qualquer dado de condutividade.
 
 ---
 
@@ -233,6 +246,89 @@ Com os parâmetros LJ o motor dava k(H₂O) = 0,0262 W/m·K a 300 K, **acima** d
 referência IAPWS de gás diluído dá 0,0186, **abaixo**. O ordenamento estava invertido. Com
 Stockmayer, k(H₂O) = 0,0244 < k(ar), e o ordenamento passa a ser o correto. Consequência prática:
 adicionar vapor d'água ao ar a 300 K agora **reduz** a condutividade da mistura, como deve.
+
+### Relaxação rotacional: Mason–Monchick com Z_rot medido
+
+**O bloqueio anterior era falso.** O relatório inicial declarou que Mason–Monchick exigiria ajustar
+Z_rot a k, o que seria ajuste empírico vedado. Isso não procede: **Z_rot é medido
+independentemente**, por relaxação acústica/ultrassônica, e é uma constante molecular no mesmo pé
+de σ, ε e do momento de dipolo. Bancos de transporte Chemkin/Cantera o tabulam. A dependência de
+temperatura vem da forma de Parker (1959), então só o valor a 298 K é armazenado.
+
+Forma implementada (padrão Chemkin/Cantera, derivada de Mason & Monchick 1962):
+
+```
+k = (μ/M)[ f_tr·C_v,tr + f_rot·C_v,rot + f_vib·C_v,vib ]
+
+A     = 5/2 − ρD/μ
+B     = Z_rot + (2/π)[(5/3)(C_v,rot/R) + ρD/μ]
+f_tr  = (5/2)[1 − (2/π)(C_v,rot/C_v,tr)(A/B)]
+f_rot = (ρD/μ)[1 + (2/π)(A/B)]
+f_vib = ρD/μ
+```
+
+**Resultado medido, por grupo, a 300 K:**
+
+| Grupo | Eucken | Mason–Monchick | Veredito |
+|---|---:|---:|---|
+| Monoatômicos (5) | 2,1 % | 2,1 % | idêntico — sem modos internos, colapsa no resultado CE exato |
+| Não polares com modos internos (11) | 4,7 % | **2,8 %** | **melhor** |
+| Polares (4) | 15,2 % | 26,5 % | **pior** |
+| Todas (20) | 6,2 % | 7,3 % | pior no agregado |
+
+**Por que os polares pioram, e por que isso é físico, não acidental.** A expressão escala a
+contribuição rotacional por ρD/μ — a taxa de difusão de **massa**. Numa molécula fortemente polar,
+a troca ressonante dipolo–dipolo transporta quanta rotacionais **sem mover moléculas**, e esse
+escalonamento deixa de valer. A evidência: a degradação cresce com o dipolo reduzido.
+
+| Espécie | δ | erro Eucken | erro MM | degradação |
+|---|---:|---:|---:|---:|
+| H₂O | 1,00 | +24,5 % | +39,5 % | 15,0 pp |
+| NH₃ | 0,70 | +12,4 % | +28,6 % | 16,2 pp |
+| SO₂ | 0,42 | +4,9 % | +14,1 % | 9,2 pp |
+| H₂S | 0,20 | +18,7 % | +23,7 % | 5,0 pp |
+
+Correlação δ × degradação: **r = 0,90** (quatro pontos — sugestivo, não conclusivo isoladamente,
+mas coerente com o mecanismo).
+
+**Adoção seletiva, pelo critério físico declarado a priori:** Mason–Monchick para moléculas **não
+polares com graus internos**; Eucken para monoatômicas (onde são idênticos) e para as polares
+(onde a hipótese central falha). A escolha reside no **dado da espécie**, num bloco
+`rotational_relaxation` do YAML — não em `if species ==` espalhado pelo código. Espécies sem o
+bloco mantêm Eucken bit a bit.
+
+**Efeito final:**
+
+| Grupo | Antes | Depois |
+|---|---:|---:|
+| Monoatômicos (5) | 2,1 % | 2,1 % |
+| Mason–Monchick (11) | 4,7 % | **2,8 %** |
+| Polares, Eucken (4) | 15,2 % | 15,2 % |
+| **Todas (20)** | **6,2 %** | **5,1 %** |
+
+Dentro dos 11, a melhora é **na média, não uniforme**: H₂ −6,9 → −0,7 %, N₂ −4,0 → −0,7 %,
+O₂ −4,0 → −0,7 %, Cl₂ −6,8 → −1,5 %, CH₄ −12,1 → −4,5 %; mas CO −0,2 → +1,3 %, NO +0,4 → +4,6 %,
+CO₂ −1,2 → +5,8 %, N₂O −3,9 → +4,2 %. Os que pioraram já estavam bons e continuam dentro de ±6 %;
+os que melhoraram eram os piores casos. Isso é a assinatura de um modelo correto na média com
+dispersão herdada da incerteza dos próprios Z_rot.
+
+### Ganho colateral: o número de Prandtl
+
+`Pr` era calculado pela forma fechada de Eucken 4γ/(9γ−5), algebricamente equivalente a μc_p/k
+**apenas enquanto k vinha de Eucken**. Com Mason–Monchick deixou de ser, e a forma fechada virou um
+bug latente. Passou a usar a definição μc_p/k, com a forma fechada apenas no limite *T* → 0, onde μ
+e k se anulam juntos.
+
+| Gás | Pr antes | Pr agora | literatura | erro antes | erro agora |
+|---|---:|---:|---:|---:|---:|
+| N₂ | 0,7369 | **0,7124** | 0,713 | +3,4 % | **−0,1 %** |
+| O₂ | 0,7385 | **0,7138** | 0,709 | +4,2 % | +0,7 % |
+| CO | 0,7370 | **0,7260** | 0,730 | +1,0 % | −0,5 % |
+| CH₄ | 0,7746 | 0,7134 | 0,740 | +4,7 % | −3,6 % |
+| **ar seco** | 0,7369 | **0,7131** | 0,707 | +4,3 % | **+0,9 %** |
+
+E a condutividade do ar seco: **−5,0 % → −1,7 %**.
+
 
 ### Erros finais, por espécie, ordenados pelo erro de k
 
@@ -486,4 +582,4 @@ Para escoamento com vapor d'água, k(H₂O) segue sendo o item mais sério.
 | `tests/test_transport_kernel.py` | **novo** — 38 testes |
 | `tests/test_air_transport.py` | traçador explícito no caminho de referência |
 
-**646 testes**, todos passando (exceto o `test_gui.py` pré-existente).
+**662 testes**, todos passando (exceto o `test_gui.py` pré-existente).

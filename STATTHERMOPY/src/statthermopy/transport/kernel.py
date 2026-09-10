@@ -136,6 +136,28 @@ class TransportKernel:
         self._eps = eps
         self._delta = delta
 
+        # Mason-Monchick inputs. Species without a measured Z_rot keep the Eucken correlation,
+        # so `_mm_mask` selects between the two without any per-cell branch.
+        from ..core.molecule import Geometry, _parker
+
+        self._mm_mask = np.array(
+            [m.rotational_relaxation is not None for m in mols], dtype=bool
+        )
+        self._z298 = np.array(
+            [m.rotational_relaxation.z_rot_298 if m.rotational_relaxation else 1.0 for m in mols]
+        )
+        self._parker_298 = np.array([_parker(e, 298.15) for e in eps])
+        cv_rot = np.zeros(n)
+        for i, m in enumerate(mols):
+            if m.geometry is Geometry.LINEAR:
+                cv_rot[i] = R
+            elif m.geometry is Geometry.NONLINEAR:
+                cv_rot[i] = 1.5 * R
+        self._cv_rot = cv_rot
+        self._is_mono = np.array(
+            [m.geometry is Geometry.MONOATOMIC for m in mols], dtype=bool
+        )
+
         # --- per-pair constants (never change) --------------------------------
         # Diffusion always uses the Lennard-Jones set, matching binary_diffusion(); the polar
         # refinement is applied to the pure-species coefficients only.
@@ -224,16 +246,8 @@ class TransportKernel:
         mu_i = self._visc_pref * np.sqrt(T_c) / o22            # Pa·s
 
         cv_m = self._cv_of(T)                                  # J/mol/K, (..., n)
-        cp_m = cv_m + R
-        gamma_i = cp_m / cv_m
-        cv_s_i = cv_m / self.M
-        k_i = mu_i * cv_s_i * (9.0 * gamma_i - 5.0) / 4.0      # Eucken, W/m/K
 
-        # --- Wilke / Mason-Saxena --------------------------------------------
-        mu_mix = self._wilke(x, mu_i)
-        k_mix = self._wilke(x, k_i)
-
-        # --- binary diffusion matrix and Blanc --------------------------------
+        # --- binary diffusion matrix (the diagonal feeds Mason-Monchick) ------
         Ts_ij = T[..., None, None] / self._eps_ij              # (..., n, n)
         o11_ij = _omega(Ts_ij, _NEUFELD_11, 0.19, 0.0)
         D_ij = (
@@ -242,6 +256,13 @@ class TransportKernel:
             * np.power(T[..., None, None], 0.5)
             / o11_ij
         )
+        D_ii = np.diagonal(D_ij, axis1=-2, axis2=-1)           # (..., n)
+
+        k_i = self._conductivity(T, P, mu_i, cv_m, D_ii)
+
+        # --- Wilke / Mason-Saxena --------------------------------------------
+        mu_mix = self._wilke(x, mu_i)
+        k_mix = self._wilke(x, k_i)
         D_im = self._blanc(x, D_ij)
 
         # --- mixture bulk ------------------------------------------------------
@@ -268,6 +289,49 @@ class TransportKernel:
             "gamma": gamma, "a": a,
             "mu_i": mu_i, "k_i": k_i, "D_im": D_im, "Sc_i": Sc_i, "Le_i": Le_i,
         }
+
+    def _conductivity(self, T, P, mu_i, cv_m, D_ii):
+        """Per-species ``k_i``: Eucken, or Mason-Monchick where a measured ``Z_rot`` exists.
+
+        Both branches are evaluated on the whole array and selected by a precomputed mask, so
+        there is no per-cell Python branch. Mirrors
+        :meth:`~statthermopy.transport.transport.TransportCalculator.conductivity` exactly.
+        """
+        cp_m = cv_m + R
+        gamma_i = cp_m / cv_m
+        eucken = mu_i * (cv_m / self.M) * (9.0 * gamma_i - 5.0) / 4.0
+
+        if not self._mm_mask.any():
+            return eucken
+
+        Cv_tr = 1.5 * R
+        cv_rot = self._cv_rot
+        cv_vib = np.maximum(cv_m - Cv_tr - cv_rot, 0.0)
+        rho_i = P[..., None] * self.M / (R * T[..., None])
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rhoD_mu = np.where(mu_i > 0.0, rho_i * D_ii / mu_i, 0.0)
+
+        # Parker scaling of Z_rot, elementwise in T.
+        x_par = self._eps / T[..., None]
+        parker_T = (
+            1.0
+            + (np.pi ** 1.5 / 2.0) * np.sqrt(x_par)
+            + (np.pi ** 2 / 4.0 + 2.0) * x_par
+            + (np.pi ** 1.5) * np.power(x_par, 1.5)
+        )
+        Z = self._z298 * self._parker_298 / parker_T
+
+        A = 2.5 - rhoD_mu
+        B = Z + (2.0 / np.pi) * ((5.0 / 3.0) * (cv_rot / R) + rhoD_mu)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.where(B != 0.0, A / B, 0.0)
+        f_tr = 2.5 * (1.0 - (2.0 / np.pi) * np.where(Cv_tr > 0, cv_rot / Cv_tr, 0.0) * ratio)
+        f_rot = rhoD_mu * (1.0 + (2.0 / np.pi) * ratio)
+        mm = (mu_i / self.M) * (f_tr * Cv_tr + f_rot * cv_rot + rhoD_mu * cv_vib)
+        # A monatomic species has no internal modes; the expression collapses to the exact
+        # Chapman-Enskog result, which is what Eucken already gives at gamma = 5/3.
+        mm = np.where(self._is_mono, (mu_i / self.M) * 2.5 * Cv_tr, mm)
+        return np.where(self._mm_mask, mm, eucken)
 
     # -- mixing rules (vectorised) ---------------------------------------------
 

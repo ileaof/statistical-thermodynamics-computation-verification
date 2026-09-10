@@ -15,3 +15,9 @@ lennard_jones:
   sigma_angstrom: 3.69
   epsilon_over_k: 91.7
   note: "Poling/Prausnitz/O'Connell (viscosity-based)"
+
+# Rotational collision number for the Mason-Monchick conductivity. Measured by acoustic
+# relaxation, not fitted to k. Parker (1959) supplies the temperature scaling.
+rotational_relaxation:
+  z_rot_298: 1.8
+  reference: "Chemkin/Cantera transport database; ultrasonic relaxation measurements. Independent of any conductivity fit."

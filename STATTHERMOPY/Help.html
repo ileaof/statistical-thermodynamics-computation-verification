@@ -1255,12 +1255,12 @@ argumento <code>--gas</code> é obrigatório neste subcomando.</p>
 <pre>  Transport properties — N2 @ T=300.0000 K, P=101325 Pa
     mu       =    1.76985e-05  Pa·s
     nu       =    1.55528e-05  m^2/s
-    k        =      0.0249598  W/m/K
-    alpha    =    2.11049e-05  m^2/s
+    k        =      0.0258183  W/m/K
+    alpha    =    2.18308e-05  m^2/s
     D_self   =    2.04408e-05  m^2/s
-    Pr       =       0.736929  -
+    Pr       =       0.712423  -
     Sc       =       0.760871  -
-    Le       =        1.03249  -
+    Le       =          1.068  -
     Z        =              1  -
     a        =        353.037  m/s
     beta     =     0.00333333  1/K
@@ -1268,10 +1268,12 @@ argumento <code>--gas</code> é obrigatório neste subcomando.</p>
     mu_JT    =              0  K/Pa</pre>
 </div>
 
-<p><strong>Como interpretar.</strong> μ = 1,770 × 10⁻⁵ Pa·s e <em>k</em> = 0,0250 W/m/K estão
-dentro de poucos por cento dos valores experimentais do N₂ — notável para um cálculo cujos únicos
-insumos moleculares são σ e ε. <em>Pr</em> = 0,737 é o resultado da forma fechada de Eucken para
-uma diatômica. <em>Z</em> = 1, β = 1/<em>T</em> = 0,00333 1/K, κ<sub>T</sub> = 1/<em>P</em> e
+<p><strong>Como interpretar.</strong> μ = 1,770 × 10⁻⁵ Pa·s e <em>k</em> = 0,0258 W/m/K ficam a
+−0,6 % e −0,7 % dos valores experimentais do N₂ — notável para um cálculo cujos únicos insumos
+moleculares são σ, ε e um número de colisão rotacional medido por relaxação acústica.
+<em>Pr</em> = 0,7124 contra 0,713 tabelado. A condutividade do N₂ usa <strong>Mason–Monchick</strong>,
+que corrige o Eucken pela relaxação rotacional; espécies sem esse número medido, e as polares,
+seguem no Eucken simples. <em>Z</em> = 1, β = 1/<em>T</em> = 0,00333 1/K, κ<sub>T</sub> = 1/<em>P</em> e
 μ<sub>JT</sub> = 0 são as assinaturas exatas do gás ideal: não são aproximações, mas consequências
 da equação de estado adotada.</p>
 
@@ -1359,15 +1361,15 @@ contribuição de cada espécie.</p>
 <div class="output">
   <div class="outhead">saída</div>
 <pre>  Air transport — Dry air @ T=300.0000 K, P=101325 Pa
-    mixing rules: mu=Wilke, k=Mason-Saxena, D_eff=Blanc
+    mixing rules: mu=Wilke, k=Mason-Saxena, D_im=Blanc
     Dynamic viscosity              =    1.83511e-05  Pa·s
     Kinematic viscosity            =    1.55959e-05  m^2/s
-    Thermal conductivity           =      0.0249919  W/m/K
-    Thermal diffusivity            =     2.1151e-05  m^2/s
+    Thermal conductivity           =      0.0258419  W/m/K
+    Thermal diffusivity            =    2.18704e-05  m^2/s
     Water-vapour diffusivity in air =    2.18993e-05  m^2/s
-    Prandtl number                 =        0.73736  -
+    Prandtl number                 =       0.713108  -
     Schmidt number                 =       0.712165  -
-    Lewis number                   =       0.965831  -
+    Lewis number                   =       0.998678  -
     Density                        =        1.17666  kg/m^3
     Specific gas constant          =        287.042  J/kg/K
     Speed of sound                 =        347.245  m/s
@@ -1385,8 +1387,8 @@ contribuição de cada espécie.</p>
 <p><strong>Como interpretar.</strong> μ = 1,835 × 10⁻⁵ Pa·s e ρ = 1,177 kg/m³ concordam com os
 valores tabelados do ar a 300 K. Note que a viscosidade da mistura (1,835 × 10⁻⁵) <em>excede</em>
 a do N₂ puro (1,770 × 10⁻⁵) porque o O₂ e o Ar são mais viscosos — a regra de Wilke não é uma
-média molar simples. <em>Pr</em> = 0,737 é o resultado da forma fechada de Eucken; o valor experimental do ar
-gira em torno de 0,71, de modo que o desvio é de poucos por cento.</p>
+média molar simples. <em>Pr</em> = 0,7131 contra 0,707 do ar tabelado — desvio de 0,9 %, e
+<em>k</em> = 0,02584 contra 0,0263, desvio de 1,7 %.</p>
 
 <h4>Ar úmido</h4>
 
@@ -1406,7 +1408,7 @@ saturado.</p>
 <div class="output">
   <div class="outhead">saída (trecho)</div>
 <pre>  Air transport — Humid air @ T=300.0000 K, P=101325 Pa, humidity ratio w=1.1029e-02 kg/kg
-    mixing rules: mu=Wilke, k=Mason-Saxena, D_eff=Blanc
+    mixing rules: mu=Wilke, k=Mason-Saxena, D_im=Blanc
     Dynamic viscosity              =    1.82192e-05  Pa·s
     Thermal conductivity           =      0.0250143  W/m/K
     Prandtl number                 =       0.738198  -

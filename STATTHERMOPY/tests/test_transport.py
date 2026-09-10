@@ -229,15 +229,35 @@ def test_density_and_kinematic_viscosity():
     assert res.nu == pytest.approx(res.mu / rho)
 
 
-def test_prandtl_eucken_form():
-    """Pr = 4γ/(9γ−5), independent of μ (Eucken) and finite at every T."""
-    mol = get("N2")
-    res = TransportCalculator(mol, State(T=300.0, P=101325.0)).compute()
-    th = Thermodynamics(mol, State(T=300.0, P=101325.0)).compute()
-    expected = 4.0 * th.gamma / (9.0 * th.gamma - 5.0)
-    assert res.Pr == pytest.approx(expected)
-    # also equal to ν/α
-    assert res.Pr == pytest.approx(res.nu / res.alpha)
+def test_prandtl_is_the_definition():
+    """Pr = mu*cp/k, for whichever conductivity model the species declares."""
+    for name in ("N2", "Ar", "H2O", "CH4"):
+        mol = get(name)
+        res = TransportCalculator(mol, State(T=300.0, P=101325.0)).compute()
+        th = Thermodynamics(mol, State(T=300.0, P=101325.0)).compute()
+        cp_s = th.Cp_m / mol.molar_mass
+        assert res.Pr == pytest.approx(res.mu * cp_s / res.k, rel=1e-12), name
+        # and equal to nu/alpha, the other identity
+        assert res.Pr == pytest.approx(res.nu / res.alpha, rel=1e-9), name
+
+
+def test_prandtl_eucken_closed_form_where_eucken_applies():
+    """Where the species keeps Eucken, Pr must still equal 4γ/(9γ−5) identically.
+
+    Argon has no rotational-relaxation record, so it uses Eucken and the closed form holds.
+    N2 declares a measured Z_rot and uses Mason-Monchick, where it does not.
+    """
+    ar = get("Ar")
+    assert ar.rotational_relaxation is None
+    res = TransportCalculator(ar, State(T=300.0, P=101325.0)).compute()
+    th = Thermodynamics(ar, State(T=300.0, P=101325.0)).compute()
+    assert res.Pr == pytest.approx(4.0 * th.gamma / (9.0 * th.gamma - 5.0))
+
+    n2 = get("N2")
+    assert n2.rotational_relaxation is not None
+    res_n2 = TransportCalculator(n2, State(T=300.0, P=101325.0)).compute()
+    th_n2 = Thermodynamics(n2, State(T=300.0, P=101325.0)).compute()
+    assert res_n2.Pr != pytest.approx(4.0 * th_n2.gamma / (9.0 * th_n2.gamma - 5.0))
 
 
 def test_prandtl_value_n2():

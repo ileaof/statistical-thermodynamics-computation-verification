@@ -43,6 +43,7 @@ from ..core.molecule import (
     InternalRotor,
     LennardJones,
     Molecule,
+    RotationalRelaxation,
     Stockmayer,
     VibrationalMode,
 )
@@ -113,6 +114,14 @@ def load_molecule(data: dict) -> Molecule:
             reference=str(sm_block.get("reference", "")),
         )
 
+    rr_block = data.get("rotational_relaxation")
+    rotational_relaxation = None
+    if rr_block:
+        rotational_relaxation = RotationalRelaxation(
+            z_rot_298=float(rr_block["z_rot_298"]),
+            reference=str(rr_block.get("reference", "")),
+        )
+
     anh_block = data.get("anharmonicity")
     anharmonicity = None
     if anh_block:
@@ -139,6 +148,7 @@ def load_molecule(data: dict) -> Molecule:
         electronic_levels=elec_levels,
         lennard_jones=lennard_jones,
         stockmayer=stockmayer,
+        rotational_relaxation=rotational_relaxation,
         anharmonicity=anharmonicity,
     )
 

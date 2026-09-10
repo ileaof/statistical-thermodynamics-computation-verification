@@ -30,6 +30,7 @@ __all__ = [
     "ElectronicLevel",
     "LennardJones",
     "Stockmayer",
+    "RotationalRelaxation",
     "Molecule",
 ]
 
@@ -203,8 +204,62 @@ class Anharmonicity:
 
 
 @dataclass(frozen=True)
+class RotationalRelaxation:
+    """Rotational collision number — the input to the Mason-Monchick conductivity.
+
+    Eucken assumes internal energy is carried at the same rate as mass diffusion. Mason & Monchick
+    (1962) refine that by accounting for how many collisions it takes to relax a rotational
+    quantum, ``Z_rot``. A molecule that relaxes slowly (large ``Z_rot``) keeps its rotational
+    energy through many collisions, changing how that energy is transported.
+
+    ``Z_rot`` is measured independently, from ultrasonic/acoustic relaxation — it is a molecular
+    constant on the same footing as σ, ε and the dipole moment, **not** fitted to conductivity
+    data. Its temperature dependence follows Parker's (1959) form, so only the 298 K value is
+    stored.
+
+    **Scope.** The Mason-Monchick expression scales the rotational contribution by ``ρD/μ``, the
+    *mass*-diffusion rate. In a strongly polar molecule resonant dipole-dipole exchange moves
+    rotational quanta without moving molecules, so that scaling breaks down: applying it to H₂O,
+    NH₃, SO₂ and H₂S makes their conductivity error *worse*, by an amount that grows with the
+    reduced dipole (r = 0.90 over those four). Polar species therefore carry no record here and
+    keep the plain Eucken correlation. See ``docs/TRANSPORT_CORRECTION_REPORT.md``.
+
+    Attributes
+    ----------
+    z_rot_298 : float
+        Rotational collision number at 298.15 K, dimensionless.
+    reference : str
+        Provenance of the value.
+    """
+
+    z_rot_298: float
+    reference: str = ""
+
+    def __post_init__(self) -> None:
+        if self.z_rot_298 <= 0.0:
+            raise ValueError("z_rot_298 must be > 0.")
+
+    def z_rot(self, T: float, epsilon_over_k: float) -> float:
+        """``Z_rot(T)`` via Parker's (1959) scaling from the 298.15 K value."""
+        return self.z_rot_298 * _parker(epsilon_over_k, 298.15) / _parker(epsilon_over_k, T)
+
+
+def _parker(epsilon_over_k: float, T: float) -> float:
+    """Parker's (1959) temperature function ``F(T)`` for the rotational collision number."""
+    import math
+
+    x = epsilon_over_k / T
+    return (
+        1.0
+        + (math.pi ** 1.5 / 2.0) * math.sqrt(x)
+        + (math.pi ** 2 / 4.0 + 2.0) * x
+        + (math.pi ** 1.5) * x ** 1.5
+    )
+
+
+@dataclass(frozen=True)
 class Stockmayer:
-    """Stockmayer potential parameters — Lennard-Jones 12-6 plus a permanent point dipole.
+    r"""Stockmayer potential parameters — Lennard-Jones 12-6 plus a permanent point dipole.
 
     A strongly polar molecule is poorly described by a spherically symmetric LJ potential: the
     dipole–dipole term deepens the attraction, deflects slow molecules more, and therefore
@@ -212,7 +267,7 @@ class Stockmayer:
     on the collision integrals is carried by a single dimensionless group, the **reduced dipole
     moment**
 
-    .. math:: \delta = rac{\mu_D^2}{2\,arepsilon\,\sigma^3}
+    .. math:: \delta = \frac{\mu_D^2}{2\,\varepsilon\,\sigma^3}
 
     which enters Brokaw's (1969) correction ``Ω*(T*, δ) = Ω*_LJ(T*) + c δ²/T*``.
 
@@ -397,6 +452,7 @@ class Molecule:
     electronic_levels: tuple[ElectronicLevel, ...] = field(default_factory=tuple)
     lennard_jones: LennardJones | None = None
     stockmayer: Stockmayer | None = None
+    rotational_relaxation: RotationalRelaxation | None = None
     anharmonicity: Anharmonicity | None = None
 
     def __post_init__(self) -> None:

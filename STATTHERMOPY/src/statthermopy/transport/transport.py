@@ -62,7 +62,7 @@ import math
 from dataclasses import asdict, dataclass
 
 from ..constants import R, k_B
-from ..core.molecule import Molecule
+from ..core.molecule import Geometry, Molecule
 from ..core.state import ResolvedState, State
 from ..thermodynamics import Thermodynamics
 from .collision import omega_11, omega_22, t_star
@@ -196,15 +196,55 @@ class TransportCalculator:
         return (5.0 / 16.0) * math.sqrt(m * k_B * T / math.pi) / (sigma * sigma * omega)
 
     def conductivity(self, T: float, mu: float | None = None) -> float:
-        """Thermal conductivity ``k(T)`` (W/m·K) via the Eucken correlation."""
+        """Thermal conductivity ``k(T)`` (W/m·K).
+
+        Uses **Mason-Monchick** when the species carries a measured rotational collision number
+        (:class:`~statthermopy.core.molecule.RotationalRelaxation`), and the **Eucken**
+        correlation otherwise. The choice belongs to the species record, not to this function.
+        """
         if T <= 0.0:
             return 0.0
         if mu is None:
             mu = self.viscosity(T)
-        th = Thermodynamics(self.molecule, State(T=float(T), P=float(self._resolved().P))).compute()
-        cv_s = th.Cv_m / th.molar_mass
-        gamma = th.gamma
-        return mu * cv_s * (9.0 * gamma - 5.0) / 4.0
+        P = float(self._resolved().P)
+        th = Thermodynamics(self.molecule, State(T=float(T), P=P)).compute()
+        rr = self.molecule.rotational_relaxation
+        if rr is None:
+            return mu * (th.Cv_m / th.molar_mass) * (9.0 * th.gamma - 5.0) / 4.0
+        return self._conductivity_mason_monchick(T, P, mu, th.Cv_m, rr)
+
+    def _conductivity_mason_monchick(self, T, P, mu, Cv_m, rr) -> float:
+        """Mason & Monchick (1962) conductivity, in the standard Chemkin/Cantera form.
+
+        ``k = (μ/M) [ f_tr C_v,tr + f_rot C_v,rot + f_vib C_v,vib ]`` with
+
+            A = 5/2 − ρD/μ,   B = Z_rot + (2/π)[(5/3)(C_v,rot/R) + ρD/μ]
+            f_tr  = (5/2)[1 − (2/π)(C_v,rot/C_v,tr)(A/B)]
+            f_rot = (ρD/μ)[1 + (2/π)(A/B)]
+            f_vib = ρD/μ
+
+        The rotational heat capacity is the rigid-rotor value: ``R`` for a linear molecule,
+        ``(3/2)R`` for a nonlinear one. For a monatomic species ``C_v,rot = C_v,vib = 0`` and the
+        expression collapses to the exact Chapman-Enskog result, identical to Eucken at γ = 5/3.
+        """
+        M = self.molecule.molar_mass
+        Cv_tr = 1.5 * R
+        if self.molecule.geometry is Geometry.MONOATOMIC:
+            return (mu / M) * 2.5 * Cv_tr
+        Cv_rot = R if self.molecule.geometry is Geometry.LINEAR else 1.5 * R
+        Cv_vib = max(Cv_m - Cv_tr - Cv_rot, 0.0)
+
+        D = self.self_diffusion_coeff(T, P)
+        rho = P * M / (R * T)
+        rhoD_mu = rho * D / mu if mu > 0.0 else 0.0
+
+        _sigma, eps_k, _delta = self._potential()
+        Z = rr.z_rot(T, eps_k)
+        A = 2.5 - rhoD_mu
+        B = Z + (2.0 / math.pi) * ((5.0 / 3.0) * (Cv_rot / R) + rhoD_mu)
+        f_tr = 2.5 * (1.0 - (2.0 / math.pi) * (Cv_rot / Cv_tr) * (A / B))
+        f_rot = rhoD_mu * (1.0 + (2.0 / math.pi) * (A / B))
+        return (mu / M) * (f_tr * Cv_tr + f_rot * Cv_rot + rhoD_mu * Cv_vib)
 
     def self_diffusion_coeff(self, T: float, P: float) -> float:
         """Self-diffusion coefficient ``D_self = D_ii`` (m²/s)."""
@@ -250,8 +290,10 @@ class TransportCalculator:
             nu = 0.0
             alpha = 0.0
 
-        # dimensionless groups — closed forms, finite at every T (including T = 0)
-        Pr = 4.0 * gamma / (9.0 * gamma - 5.0)
+        # Pr is the definition mu*cp/k. When k comes from Eucken this equals the closed form
+        # 4*gamma/(9*gamma - 5) identically; with Mason-Monchick it does not, so the definition
+        # is used and the closed form only serves the T -> 0 limit where mu and k both vanish.
+        Pr = (mu * cp_s / k_th) if k_th > 0.0 else 4.0 * gamma / (9.0 * gamma - 5.0)
         # Sc = ν/D_self = (5/6) Ω11/Ω22 for self-diffusion (exact; avoids 0/0 at T = 0)
         o11 = omega_11(Ts, delta) if T > 0.0 else omega_11(0.0, delta)
         o22 = omega_22(Ts, delta) if T > 0.0 else omega_22(0.0, delta)
