@@ -2552,8 +2552,10 @@ produz o −1,95 % a 2000 K da Etapa 2.</p>
   partir de <em>T</em> = 0 K da molécula isolada, ao passo que a entalpia de uma tabela de vapor é
   medida a partir do líquido saturado no ponto triplo e inclui o calor de vaporização. As duas
   também diferem por uma constante, mas essa constante <strong>não</strong> é a mesma da entropia:
-  determiná-la exige a entalpia de formação, que o motor não fornece. Use <em>C<sub>p</sub></em> e
-  <em>S</em> para verificar — são as grandezas que comparam sem ambiguidade.
+  obtê-la exige o calor de vaporização e a capacidade calorífica do líquido até 0 K — informação de
+  fase condensada que um motor de gás ideal, por construção, não possui. Use
+  <em>C<sub>p</sub></em> e <em>S</em> para verificar: são as grandezas que comparam sem
+  ambiguidade. A Seção 13.6 quantifica essa constante em base mássica.
 </div>
 
 <h4>Conclusão da verificação</h4>
@@ -2565,7 +2567,218 @@ tabelada da água com <strong>0,14 % de erro médio</strong> e a capacidade calo
 Os desvios residuais têm origem física identificada e sinal previsível: anarmonicidade em alta
 temperatura, não idealidade perto da saturação.</p>
 
-<h3>13.6 Validação pela interface gráfica</h3>
+<h3>13.6 Comparação em base mássica com a tabela de vapor</h3>
+
+<p>Tabelas de vapor de engenharia (Çengel, Moran, ASME, IAPWS) são tabuladas em
+<strong>base mássica</strong> — kJ/kg e kJ/kg·K —, não molar. O motor fornece as duas bases no
+mesmo relatório, o que permite confrontá-lo diretamente com a tabela que se tem à mão. Esta seção
+repete a verificação da Seção 13.5 nas unidades de engenharia e nas linhas clássicas de vapor
+superaquecido a 0,1 MPa.</p>
+
+<h4>A verificação exata: constante do gás</h4>
+
+<p>Antes das grandezas aproximadas, uma que deve bater exatamente. <code>R_specific</code> não vem
+de ajuste algum: é <em>R</em>/<em>M</em>.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --gas H2O --T 500 --P 100000</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída (linha relevante)</div>
+<pre>    R_specific     =     461.522808  J/kg/K</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> O valor tabelado de <em>R</em> do vapor d'água é
+0,4615 kJ/kg·K. O motor devolve 461,5228 J/kg·K, contra <em>R</em>/<em>M</em> =
+8,314463/0,0180153 = 461,5223 J/kg·K — concordância em seis algarismos, com o resíduo vindo apenas
+do arredondamento da massa molar. Se esta linha não bater, o problema é a espécie selecionada, não
+a física.</p>
+
+<h4>Calor específico a pressão constante</h4>
+
+<p><strong>Objetivo.</strong> Comparar <em>c<sub>p</sub></em> do motor com a tabela de vapor
+superaquecido a 0,1 MPa, nas temperaturas usuais de tabela.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">python</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>from iapws import IAPWS95                      # pip install -e ".[humidair]"
+from statthermopy import Thermodynamics, State
+from statthermopy.database import get
+
+h2o = get("H2O")
+print(f"{'T[C]':&gt;7} {'T[K]':&gt;7} | {'cp motor':&gt;10} {'cp tabela':&gt;10} {'dif %':&gt;7}")
+for Tc in (150, 200, 250, 300, 400, 500, 700):
+    T = Tc + 273.15
+    cp_motor = Thermodynamics(h2o, State(T=T, P=100000.0)).compute().Cp_s / 1000
+    cp_tab = IAPWS95(T=T, P=0.1).cp             # kJ/kg/K
+    print(f"{Tc:7d} {T:7.2f} | {cp_motor:10.4f} {cp_tab:10.4f} "
+          f"{100 * (cp_motor - cp_tab) / cp_tab:+7.2f}")</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída — cp [kJ/kg·K] a 0,1 MPa</div>
+<pre>   T[C]    T[K] |   cp motor  cp tabela   dif %
+    150  423.15 |     1.9070     1.9846   -3.91
+    200  473.15 |     1.9339     1.9754   -2.10
+    250  523.15 |     1.9630     1.9893   -1.32
+    300  573.15 |     1.9934     2.0124   -0.94
+    400  673.15 |     2.0569     2.0698   -0.63
+    500  773.15 |     2.1229     2.1344   -0.54
+    700  973.15 |     2.2589     2.2731   -0.63</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A ordem de grandeza está certa em toda a faixa — o valor de
+manual <em>c<sub>p</sub></em> ≈ 1,9 a 2,3 kJ/kg·K é reproduzido. Mas o padrão do erro chama a
+atenção: <strong>−3,91 % a 150 °C</strong>, caindo para −0,54 % a 500 °C. Se o desvio fosse falha
+do modelo estatístico, ele <em>cresceria</em> com a temperatura (a anarmonicidade piora ao
+aquecer), não o contrário. O sinal invertido denuncia outra causa.</p>
+
+<h4>O teste decisivo: isolar a não idealidade</h4>
+
+<p>A 0,1 MPa e 150 °C, o vapor está a apenas 50 °C da saturação e é sensivelmente <em>não ideal</em>
+— e o motor é, por construção, um motor de gás ideal. Repetindo a comparação a pressão muito
+baixa, onde o vapor real tende ao gás ideal, o efeito se separa do erro do motor:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">python</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>print(f"{'T[K]':&gt;7} | {'motor':&gt;9} {'tab 1 bar':&gt;9} {'dif %':&gt;7} "
+      f"| {'motor':&gt;9} {'tab ~0':&gt;9} {'dif %':&gt;7}")
+for T in (423.15, 473.15, 573.15, 673.15, 773.15, 973.15):
+    a = Thermodynamics(h2o, State(T=T, P=1e5)).compute().Cp_s / 1000
+    b = IAPWS95(T=T, P=0.1).cp                 # 1 bar: fluido real
+    c = Thermodynamics(h2o, State(T=T, P=100.0)).compute().Cp_s / 1000
+    d = IAPWS95(T=T, P=0.0001).cp              # 1 mbar: praticamente ideal
+    print(f"{T:7.2f} | {a:9.4f} {b:9.4f} {100*(a-b)/b:+7.2f} "
+          f"| {c:9.4f} {d:9.4f} {100*(c-d)/d:+7.2f}")</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída — cp [kJ/kg·K]: a 1 bar e no limite de gás ideal</div>
+<pre>   T[K] |     motor tab 1 bar   dif % |     motor    tab ~0   dif %
+ 423.15 |    1.9070    1.9846   -3.91 |    1.9070    1.9132   -0.33
+ 473.15 |    1.9339    1.9754   -2.10 |    1.9339    1.9400   -0.31
+ 573.15 |    1.9934    2.0124   -0.94 |    1.9934    1.9995   -0.30
+ 673.15 |    2.0569    2.0698   -0.63 |    2.0569    2.0635   -0.32
+ 773.15 |    2.1229    2.1344   -0.54 |    2.1229    2.1308   -0.37
+ 973.15 |    2.2589    2.2731   -0.63 |    2.2589    2.2716   -0.56</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> Este é o resultado central da comparação. Removida a não
+idealidade, o desvio desaba de −3,91 % para <strong>−0,33 %</strong> a 150 °C, e a coluna inteira
+se estabiliza em torno de <strong>−0,3 %</strong>. Ou seja: dos −3,91 % observados a 1 bar,
+aproximadamente 3,6 pontos percentuais são <em>comportamento real do vapor</em>, que a tabela
+captura e o gás ideal não, e apenas ≈ 0,3 ponto é erro do motor. O resíduo de −0,3 % é o erro
+próprio do modelo rotor rígido / oscilador harmônico, e só volta a crescer em alta temperatura
+(−0,56 % a 973 K), quando a anarmonicidade assume.</p>
+
+<div class="callout note">
+  <span class="label">Consequência prática</span>
+  Para uso em engenharia a baixa pressão — ar úmido, secagem, combustão, exaustão — o motor
+  entrega <em>c<sub>p</sub></em> do vapor com ≈ 0,3 % de erro sem consultar tabela alguma. Perto da
+  linha de saturação, ou a pressões elevadas, a hipótese de gás ideal domina o erro e uma equação
+  de estado real (IAPWS-95) passa a ser necessária.
+</div>
+
+<h4>Entropia específica</h4>
+
+<p>A entropia mássica carrega o mesmo deslocamento de estado de referência da Seção 13.5, agora
+dividido pela massa molar: 63,130 J/mol·K ÷ 0,0180153 kg/mol =
+<strong>3,5043 kJ/kg·K</strong>.</p>
+
+<div class="output">
+  <div class="outhead">saída — deslocamento s<sub>motor</sub> − s<sub>tabela</sub> [kJ/kg·K]</div>
+<pre>   T[K] |        1 bar     0,01 bar    0,001 bar
+ 423.15 |       3.5183       3.5054       3.5053
+ 473.15 |       3.5119       3.5047       3.5046
+ 573.15 |       3.5066       3.5035       3.5034
+ 673.15 |       3.5041       3.5024       3.5024
+ 773.15 |       3.5024       3.5014       3.5014
+ 973.15 |       3.4996       3.4991       3.4991
+
+  constante teórica = 63,130 / 0,0180153 / 1000 = 3.5043 kJ/kg/K</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> Lendo cada linha da esquerda para a direita, a não idealidade
+é eliminada e o deslocamento converge. Lendo a coluna da direita de cima para baixo, resta uma
+deriva lenta — de 3,5053 a 3,4991 kJ/kg·K —, que é o erro de anarmonicidade acumulado na entropia:
+0,18 % ao longo de 550 K. Portanto, para converter uma entropia de tabela de vapor na escala
+absoluta do motor:</p>
+
+<div class="equation">
+  <em>s</em><sub>absoluta</sub> ≈ <em>s</em><sub>tabela</sub> + 3,504 kJ/kg·K
+  <span class="caption">Válido para o vapor d'água. A constante é o zero da escala IAPWS — a
+  entropia absoluta do líquido saturado no ponto triplo — expressa por unidade de massa.</span>
+</div>
+
+<h4>Entalpia e energia interna específicas</h4>
+
+<p>Aqui o deslocamento também é aproximadamente constante, mas de outra natureza — e vale
+quantificá-lo para evitar a leitura equivocada de que motor e tabela discordam:</p>
+
+<div class="output">
+  <div class="outhead">saída — h e u [kJ/kg] a 0,1 MPa</div>
+<pre>   T[K] |    h_motor    h_tabela    desloc |    u_motor    u_tabela    desloc
+ 423.15 |     785.88     2776.60  -1990.72 |     590.59     2582.94  -1992.35
+ 473.15 |     881.90     2875.45  -1993.55 |     663.53     2658.21  -1994.68
+ 573.15 |    1078.22     3074.53  -1996.31 |     813.70     2810.65  -1996.95
+ 673.15 |    1280.71     3278.56  -1997.85 |     970.04     2968.29  -1998.25
+ 773.15 |    1489.68     3488.73  -1999.05 |    1132.86     3132.18  -1999.32</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> A diferença bruta é enorme — 785,9 contra 2776,6 kJ/kg a
+423 K — mas a <em>diferença das diferenças</em> quase não varia: o deslocamento fica entre −1990,7
+e −1999,1 kJ/kg, oscilando 0,4 % em 350 K. Isso confirma que as duas escalas medem a mesma coisa a
+partir de zeros distintos. O motor conta a entalpia térmica da molécula isolada a partir de 0 K;
+a tabela conta a partir do líquido saturado no ponto triplo e, portanto, já embute o aquecimento do
+líquido e o calor de vaporização — daí o deslocamento negativo de cerca de 2000 kJ/kg, da ordem de
+grandeza do calor latente. A deriva residual de 0,4 % é a integral do erro de
+<em>c<sub>p</sub></em> ao longo da faixa.</p>
+
+<div class="callout warn">
+  <span class="label">Use diferenças, não valores absolutos</span>
+  Para trabalho de engenharia, o que importa é Δ<em>h</em> entre dois estados, e aí a constante se
+  cancela. Comparar <code>H_s</code> do motor com <em>h</em> de tabela de vapor <em>ponto a
+  ponto</em> não tem significado sem aplicar o deslocamento — que, ao contrário do da entropia, não
+  é dedutível do próprio motor.
+</div>
+
+<h4>Resumo</h4>
+
+<div class="table-wrap">
+  <table>
+    <caption>Vapor d'água em base mássica: motor estatístico contra tabela termodinâmica,
+    423–973 K.</caption>
+    <thead>
+      <tr><th>Grandeza</th><th>Comparação</th><th>Concordância</th><th>Observação</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><em>R</em> específico</td><td>direta</td><td class="num">6 dígitos</td>
+        <td>Identidade <em>R</em>/<em>M</em>; não é aproximação.</td>
+      </tr>
+      <tr>
+        <td><em>c<sub>p</sub></em> (limite ideal)</td><td>direta</td><td class="num">≈ 0,3 %</td>
+        <td>Erro próprio do motor; sobe a 0,56 % em 973 K.</td>
+      </tr>
+      <tr>
+        <td><em>c<sub>p</sub></em> (1 bar)</td><td>direta</td><td class="num">0,5 – 3,9 %</td>
+        <td>Dominado pela não idealidade perto da saturação, não pelo motor.</td>
+      </tr>
+      <tr>
+        <td><em>s</em></td><td>+ 3,504 kJ/kg·K</td><td class="num">≈ 0,2 %</td>
+        <td>Deslocamento dedutível: é o zero da escala IAPWS.</td>
+      </tr>
+      <tr>
+        <td><em>h</em>, <em>u</em></td><td>≈ − 1995 kJ/kg</td><td class="num">≈ 0,4 %</td>
+        <td>Deslocamento não dedutível do motor; use Δ<em>h</em>.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>13.7 Validação pela interface gráfica</h3>
 
 <p>A aba <strong>Validate</strong> executa a mesma comparação, exibindo um selo colorido de
 veredito PASS/FAIL e um gráfico do motor sobreposto à referência (Figura 4).</p>
