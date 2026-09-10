@@ -177,10 +177,13 @@ Q_v):
 Limits: T ≪ θ_v → mode frozen (U → 0, Cv → 0); T ≫ θ_v → equipartition (U → R T, Cv → R per
 oscillator). Degenerate modes (e.g. CO2 bend g=2, CH4 ν3 g=3) are counted through g_i.
 
-**Limitations**: harmonic approximation — neglects anharmonicity, mode coupling, and
-zero-point-energy shifts. Adequate up to a few thousand K for most species; above that the
-heat capacity is overestimated slightly. Low-frequency torsions about single bonds are better
-described as *hindered internal rotors* (§4b) than as harmonic oscillators.
+**Limitations**: harmonic approximation — neglects anharmonicity and mode coupling. A real
+potential widens with energy, so its levels *close up*; the equally spaced harmonic ladder
+therefore **under**-populates the high-lying states and **under**-predicts Cp as temperature
+rises. Measured for H2O against NIST/JANAF, the deficit reaches −1.90 % in Cp at 2000 K (see
+`H2O_AUDIT.md` §8.2). §4c removes this approximation where the anharmonicity constants are
+available. Low-frequency torsions about single bonds are better described as *hindered internal
+rotors* (§4b) than as harmonic oscillators.
 
 ---
 
@@ -231,6 +234,48 @@ essentially exact across 298–2000 K (mean error ≈ 0.3 %) and keeps ethane wi
 **Limitations**: one-dimensional and uncoupled — top–top and top–frame coupling, and the change
 of I_r with the overall rotation, are neglected. The potential is a single cosine term (only the
 leading n-fold barrier V_n); higher harmonics are not represented.
+
+---
+
+## 4c. Anharmonic vibrational manifold (optional refinement)
+
+When a species carries second-order (Dunham) anharmonicity constants, the engine abandons the
+equally spaced ladder and sums the **real level manifold** instead. The vibrational term value is
+
+    G(v_1, ..., v_n) = Σ_i ω_i (v_i + 1/2) + Σ_{i ≤ j} x_ij (v_i + 1/2)(v_j + 1/2)
+
+with ω_i the *harmonic* wavenumbers (not the observed fundamentals) and x_ij the anharmonicity
+matrix, both in cm^-1. The partition function is then an explicit sum over the manifold, exactly
+as the electronic factor sums over its terms:
+
+    Q_v = Σ_k exp(-θ_k / T),    θ_k = h c [G(v_k) - G(0)] / k_B
+
+    U_m  = R ⟨θ⟩
+    Cv_m = R (⟨θ²⟩ - ⟨θ⟩²) / T²
+    S_m  = R [ ln Q_v + ⟨θ⟩ / T ]
+    A_m  = -R T ln Q_v
+
+The energy zero stays at the ground vibrational level G(0), so the zero-point energy is excluded
+and H_m remains the JANAF-style increment H(T) − H(0), identical in convention to §4.
+
+**Still first-principles.** ω_i and x_ij are *spectroscopic* constants read from vibrational
+spectra, on the same footing as the rotational constants — not empirical property correlations.
+
+**Self-validation.** The observed fundamentals are a *consequence* of these constants,
+ν_i = ω_i + 2 x_ii + (1/2) Σ_{j≠i} x_ij, so the constant set checks itself. For H2O the predicted
+fundamentals reproduce 3657 / 1595 / 3756 cm^-1 to ≤ 1.7 cm^-1, with ZPE = 4634.6 cm^-1.
+
+**Truncation.** The expansion is asymptotic: beyond some v the quadratic term turns the spacing
+negative. Two guards apply — the manifold is cut at a dissociation limit, and any level reached by
+*lowering* the energy is rejected.
+
+**Scope and effect.** Only non-degenerate modes are supported (a degenerate mode needs its own
+level counting) and the refinement is opt-in per species: only H2O carries the constants today, so
+every other species keeps the §4 harmonic path unchanged. For water the Cp deficit at 2000 K falls
+from −1.90 % to −0.57 %, and the validation-layer mean error from 0.81 % to 0.38 %. What remains is
+a flat ≈ −0.3 % rotational floor from centrifugal distortion (§3.4), which anharmonicity does not
+touch. The compiled backends model only harmonic ladders, so they decline anharmonic species and
+defer to the reference path — a backend changes execution, never the model.
 
 ---
 

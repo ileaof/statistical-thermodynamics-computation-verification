@@ -15,6 +15,11 @@ calculation itself.
 - Translational, rotational, vibrational (quantum harmonic oscillator) and electronic
   contributions, plus **hindered internal rotation** (1-D Mathieu-eigenvalue rotor) for
   single-bond torsions such as the methyl tops of ethane and propane.
+- **Anharmonic vibrational manifold** (optional, per species) — where the second-order Dunham
+  constants ω_e and x_ij are available the engine sums the *real* level manifold instead of an
+  equally spaced harmonic ladder. These are spectroscopic constants, so the core stays
+  correlation-free. For H₂O it cuts the Cp error at 2000 K from −1.90 % to −0.57 % and the
+  validation-layer mean from 0.81 % to 0.38 %; see [docs/H2O_AUDIT.md](docs/H2O_AUDIT.md).
 - Molar and massic bases for U, H, S, A, G, Cv, Cp, γ, μ, plus total partition function.
 - Ideal-gas mixtures (mole or mass fractions) with a per-component contribution breakdown and
   the entropy of mixing, plus a **predefined-fluid** registry — select **Air** (standard dry

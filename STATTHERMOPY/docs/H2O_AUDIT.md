@@ -26,7 +26,14 @@ ambas externas ao código**:
 | 2 | Anarmonicidade, ausente no oscilador harmônico | Limitação do modelo (9) | Cresce de −0,4 % (800 K) a **−1,90 %** (2000 K) |
 | 3 | Não idealidade do vapor real, quando a comparação é feita a 1 bar perto da saturação | Comparação inadequada (7/10) | Até **+9,9 %** a 373,15 K — 30× maior que o erro do motor |
 
-**Nenhuma alteração no motor é necessária ou recomendada.** Dois erros adicionais foram
+**Nenhum defeito foi encontrado no motor.** O que a auditoria identificou foi uma *limitação de
+modelo*, e a extensão legítima que ela propôs (§12) foi em seguida implementada: o motor passou a
+somar a variedade anarmônica de níveis da água, reduzindo o erro de *C_p* a 2000 K de **−1,90 %
+para −0,52 %** e o erro médio da camada de validação de 0,81 % para 0,38 %. Ver §15, onde também se
+documenta por que a rotação quântica exata (65× pequena demais) e a distorção centrífuga (não
+converge) foram testadas e rejeitadas antes.
+
+Dois erros adicionais foram
 encontrados, ambos na *documentação* e não no código — e ambos com a mesma origem: uma constante de
 referência medida **com o motor dentro da subtração e a 1 bar**, absorvendo o erro do motor e a não
 idealidade do vapor. Ver §9.
@@ -229,6 +236,9 @@ feita neste relatório é, portanto, legítima. **Classificação: sem erro de c
 ---
 
 ## 7. Comparação com as referências
+
+> **Nota.** Esta seção e a §8 descrevem o estado **anterior** à correção, com o oscilador
+> harmônico — é o diagnóstico. O resultado após a implementação está na §15.3.
 
 ### 7.1 *C_p,m* contra IAPWS-95 no limite de gás ideal (independente do NIST)
 
@@ -630,9 +640,14 @@ limite ideal.
 
 ## 12. Correção recomendada
 
-**No motor: nenhuma.** O código está correto e não deve ser alterado. Qualquer ajuste de frequência
-para forçar acordo seria empírico, seria falsificado em outras temperaturas (§8.4b) e violaria o
-princípio de que o núcleo permaneça mecânica estatística pura.
+**Correção de defeito: nenhuma.** O código está correto. Qualquer ajuste de frequência para forçar
+acordo seria empírico, seria falsificado em outras temperaturas (§8.4b) e violaria o princípio de
+que o núcleo permaneça mecânica estatística pura.
+
+**Extensão de modelo: implementada.** A "extensão futura legítima" prevista ao final desta seção
+foi realizada — o manifold anarmônico da §15. Ela não corrige um erro de implementação; remove uma
+*aproximação*, usando constantes espectroscópicas, e portanto preserva a formulação
+estatístico-mecânica.
 
 **Aplicadas nesta auditoria:**
 
@@ -689,3 +704,113 @@ particular**. A tolerância de 5 % da camada de validação continua adequada.
    valor de referência primário melhoraria a terceira casa.
 5. A auditoria cobre H₂O(g). As expectativas da §13 para outras espécies são qualitativas e não
    foram medidas.
+---
+
+## 15. Implementação: o manifold anarmônico
+
+As §7–§8 descrevem o estado **anterior** à correção, com o oscilador harmônico. Esta seção
+documenta a extensão implementada em resposta ao diagnóstico e o resultado medido.
+
+### 15.1 O que foi descartado antes de implementar
+
+Duas rotas foram testadas e rejeitadas por medição, não por opinião.
+
+**(a) Rotação quântica exata (pião assimétrico).** Diagonalizando
+*H* = *A J*ₐ² + *B J*_b² + *C J*_c² na base do pião simétrico para cada *J* e somando
+Σ_J (2*J*+1) Σ_τ e^(−E/kT):
+
+| *T* [K] | *Q* quântica | *Q* clássica | *C_v* quântica | *C_v* clássica | Ganho |
+|---|---|---|---|---|---|
+| 100 | 8,76759 | 8,37871 | 12,48414 | 12,47170 | +0,01244 |
+| 298,15 | 43,78802 | 43,13496 | 12,47333 | 12,47170 | **+0,00163** |
+| 1000 | 266,14205 | 264,95807 | 12,47185 | 12,47170 | +0,00015 |
+
+O ganho a 298 K é **65 vezes menor** que os +0,106 J/mol·K necessários, e na entropia tem o sinal
+errado (−0,0008). A 298 K a água tem *T*/θ entre 7 e 22, e o rotor clássico já é excelente:
+**o piso não é efeito de quantização**. Rejeitada.
+
+**(b) Distorção centrífuga.** Acrescentando os termos de Watson
+−*D_J* [*J*(*J*+1)]² − *D_JK* *J*(*J*+1)*K*² − *D_K* *K*⁴ aos mesmos autovalores, o resultado
+**não converge**: o ganho vale +0,48 / +0,57 / +0,70 J/mol·K para *J*max = 12 / 15 / 18 e depois
+diverge catastroficamente (−11,8 a *J*max = 20), porque a expansão é assintótica e em *J* alto o
+termo centrífugo supera o rígido. O rotor rígido, no mesmo teste, converge limpo
+(12,473329 para *J*max ≥ 20). Sem a lista de níveis medidos, este efeito **não é determinável**
+neste nível de tratamento. Rejeitada.
+
+### 15.2 O que foi implementado
+
+A anarmonicidade, que é bem-posta e converge. O termo vibracional de segunda ordem (Dunham)
+
+> *G*(*v*₁,…,*v_n*) = Σ_i ω_i (*v_i* + ½) + Σ_{i ≤ j} *x_ij* (*v_i* + ½)(*v_j* + ½)
+
+gera a variedade real de níveis, somada exatamente como o modo eletrônico soma seus termos:
+*Q_v* = Σ_k e^(−θ_k/T), com o zero em *G*(0) — preservando a convenção
+*H*(*T*) − *H*(0), sem ZPE.
+
+**Continua mecânica estatística pura.** ω_i e *x_ij* são constantes **espectroscópicas**, lidas de
+espectros vibracionais na mesma condição das constantes rotacionais — não são correlações
+empíricas de propriedade.
+
+**Autovalidação.** As fundamentais observadas são *consequência* dessas constantes. Para a água:
+
+| Modo | Prevista pelas constantes | Observada | Diferença |
+|---|---|---|---|
+| ν₁ | 3656,14 cm⁻¹ | 3657 | −0,86 |
+| ν₂ | 1596,71 cm⁻¹ | 1595 | +1,71 |
+| ν₃ | 3756,71 cm⁻¹ | 3756 | +0,71 |
+| ZPE | 4634,62 cm⁻¹ | ≈ 4638 | — |
+
+Concordância ≤ 1,7 cm⁻¹ (0,05 %) sem nenhum ajuste — se as constantes estivessem erradas ou fora
+de ordem, isso não fecharia.
+
+**Truncamento.** A expansão é assintótica: além de certo *v* o termo quadrático inverte o
+espaçamento. Dois guardas — corte em `dissociation_cm1` (41 000 cm⁻¹ para a água, *D*₀(H–OH)) e
+rejeição de qualquer nível alcançado *baixando* a energia. Restam 1157 níveis para H₂O.
+
+### 15.3 Resultado medido
+
+| *T* [K] | Referência | Harmônico (antes) | Anarmônico (agora) | Melhora |
+|---|---|---|---|---|
+| 298,15 | 33,5875 | −0,315 % | −0,318 % | — |
+| 500 | 35,2263 | −0,308 % | −0,306 % | — |
+| 800 | 38,7214 | −0,392 % | −0,268 % | 32 % |
+| 1000 | 41,2673 | −0,591 % | −0,329 % | 44 % |
+| 1500 | 47,0899 | −1,275 % | −0,521 % | 59 % |
+| 2000 | 51,1801 | **−1,900 %** | **−0,523 %** | **72 %** |
+
+Camada de validação embarcada:
+
+| Grandeza | Antes | Agora |
+|---|---|---|
+| *C_p* erro médio | 0,8084 % | **0,3840 %** |
+| *C_p* erro máximo | 1,9474 % | **0,5711 %** |
+| *S* erro médio | 0,1369 % | **0,1112 %** |
+| *S* erro máximo | 0,2500 % | **0,1524 %** |
+
+O erro deixa de **crescer** e passa a ficar **plano** entre −0,27 % e −0,52 % em 298–2000 K. O que
+sobra é o piso rotacional diagnosticado na §8.3, que a anarmonicidade não toca — exatamente como a
+§8 previu. A baixa temperatura nada muda, porque a vibração está congelada, o que é a verificação
+de que a implementação não introduziu efeito espúrio.
+
+### 15.4 Consequência para os backends compilados
+
+Os kernels `molar_property_grid` (Numba/OpenMP/CUDA) modelam apenas escadas harmônicas
+equidistantes. Deixá-los intocados faria o caminho vetorizado devolver números harmônicos enquanto
+o caminho de referência devolve anarmônicos — quebrando a invariante do projeto de que **um backend
+muda a execução numérica, nunca o modelo**. O guarda existente para rotores internos foi
+generalizado (`_kernel_unsupported`): espécies com variedade anarmônica também recuam para o
+caminho Python exato. Verificado: numpy, numba e openmp devolvem valores idênticos para H₂O em
+10⁻¹².
+
+### 15.5 Escopo e limitações da extensão
+
+* **Opcional por espécie.** Somente H₂O carrega o bloco hoje; as outras 29 seguem no caminho
+  harmônico, com resultados inalterados (travado por teste).
+* **Apenas modos não degenerados.** A contagem de níveis de um modo degenerado exige combinatória
+  própria; o construtor rejeita esse caso explicitamente, em vez de errar em silêncio.
+* **Sem aceleração.** Espécies anarmônicas usam o caminho de referência, mais lento.
+* **O piso rotacional permanece.** −0,32 % em *C_p* e −0,06 % em *S* seguem sem tratamento, pelas
+  razões da §15.1(b).
+* **Segunda ordem.** O resíduo residual a 2000 K (−0,52 %) inclui termos de ordem superior não
+  cobertos pela expansão de Dunham truncada.
+

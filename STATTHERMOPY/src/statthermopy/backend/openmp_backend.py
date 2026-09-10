@@ -19,7 +19,7 @@ import numpy as np
 from .numba_backend import (
     NumbaBackend,
     _extract_spec,
-    _has_internal_rotors,
+    _kernel_unsupported,
     _import_numba,
     _kernels,
 )
@@ -90,8 +90,8 @@ class OpenMPBackend(NumbaBackend):
     def molar_property_grid(self, mol, T_array, P, use_quantum, cutoff=150):
         from ..constants import N_A, R, h, k_B
 
-        if _has_internal_rotors(mol):
-            return None  # internal rotors aren't in the kernel; use the per-T Python path
+        if _kernel_unsupported(mol):
+            return None  # internal rotors / anharmonic manifold: use the per-T Python path
         kernel = _parallel_kernel()
         spec = _extract_spec(mol)
         T_arr = np.asarray(T_array, dtype=np.float64)

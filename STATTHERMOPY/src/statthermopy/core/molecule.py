@@ -25,6 +25,7 @@ from ..units import molar_mass_gmol_to_kgmol
 __all__ = [
     "Geometry",
     "VibrationalMode",
+    "Anharmonicity",
     "InternalRotor",
     "ElectronicLevel",
     "LennardJones",
@@ -108,6 +109,96 @@ class InternalRotor:
             raise ValueError("Potential periodicity n must be >= 1.")
         if self.degeneracy < 1:
             raise ValueError("Internal-rotor degeneracy must be >= 1.")
+
+
+@dataclass(frozen=True)
+class Anharmonicity:
+    """Second-order (Dunham) anharmonicity constants for the vibrational manifold.
+
+    The harmonic oscillator spaces every level of a mode equally. A real potential widens with
+    energy, so the true levels close up — the harmonic model therefore *under-populates* the
+    high-lying states and under-predicts ``Cv`` as temperature rises. The standard second-order
+    expansion of the vibrational term value restores that:
+
+    .. math::
+
+        G(v_1,\\dots,v_n) = \\sum_i \\omega_i (v_i + \\tfrac12)
+                          + \\sum_{i \\le j} x_{ij} (v_i + \\tfrac12)(v_j + \\tfrac12)
+
+    with :math:`\\omega_i` the **harmonic** wavenumbers (not the observed fundamentals) and
+    :math:`x_{ij}` the anharmonicity matrix, both in cm⁻¹. These are *spectroscopic* constants,
+    obtained from vibrational spectra exactly as the rotational constants are — they are not
+    empirical property correlations, so the engine stays first-principles.
+
+    The observed fundamentals are a *consequence* of these constants,
+    :math:`\\nu_i = \\omega_i + 2x_{ii} + \\tfrac12\\sum_{j \\ne i} x_{ij}`, which gives a direct
+    self-check: :meth:`fundamentals_cm1` must reproduce the tabulated ν values.
+
+    The expansion is asymptotic — beyond some ``v`` the quadratic term turns the level spacing
+    negative and the series is meaningless. ``dissociation_cm1`` truncates the manifold there;
+    levels are additionally rejected once the spacing stops increasing monotonically.
+
+    Attributes
+    ----------
+    harmonic_wavenumbers_cm1 : tuple[float, ...]
+        Harmonic frequencies ω_i, one per non-degenerate normal mode.
+    x_matrix_cm1 : tuple[tuple[float, ...], ...]
+        Symmetric anharmonicity matrix x_ij in cm⁻¹ (full n×n; only i ≤ j is read).
+    dissociation_cm1 : float
+        Energy above the vibrational ground state at which the manifold is truncated.
+    reference : str
+        Provenance of the constants.
+    """
+
+    harmonic_wavenumbers_cm1: tuple[float, ...]
+    x_matrix_cm1: tuple[tuple[float, ...], ...]
+    dissociation_cm1: float
+    reference: str = ""
+
+    def __post_init__(self) -> None:
+        n = len(self.harmonic_wavenumbers_cm1)
+        if n == 0:
+            raise ValueError("Anharmonicity needs at least one harmonic wavenumber.")
+        if any(w <= 0 for w in self.harmonic_wavenumbers_cm1):
+            raise ValueError("Harmonic wavenumbers must be > 0 cm^-1.")
+        if len(self.x_matrix_cm1) != n or any(len(row) != n for row in self.x_matrix_cm1):
+            raise ValueError(f"x_matrix_cm1 must be {n}x{n} for {n} modes.")
+        if self.dissociation_cm1 <= 0:
+            raise ValueError("dissociation_cm1 must be > 0.")
+
+    @property
+    def n_modes(self) -> int:
+        """Number of normal modes described."""
+        return len(self.harmonic_wavenumbers_cm1)
+
+    def term_value_cm1(self, v: tuple[int, ...]) -> float:
+        """Vibrational term value ``G(v)`` in cm⁻¹, **including** the zero-point energy."""
+        w = self.harmonic_wavenumbers_cm1
+        x = self.x_matrix_cm1
+        half = [vi + 0.5 for vi in v]
+        g = sum(w[i] * half[i] for i in range(len(w)))
+        for i in range(len(w)):
+            for j in range(i, len(w)):
+                g += x[i][j] * half[i] * half[j]
+        return g
+
+    @property
+    def zero_point_energy_cm1(self) -> float:
+        """``G(0, ..., 0)`` — the zero-point energy implied by the constants."""
+        return self.term_value_cm1(tuple(0 for _ in self.harmonic_wavenumbers_cm1))
+
+    def fundamentals_cm1(self) -> tuple[float, ...]:
+        """Fundamental transitions ``G(0..1_i..0) - G(0...0)`` predicted by the constants.
+
+        Comparing these with the observed fundamentals validates the constant set.
+        """
+        zero = self.zero_point_energy_cm1
+        out = []
+        for i in range(self.n_modes):
+            v = [0] * self.n_modes
+            v[i] = 1
+            out.append(self.term_value_cm1(tuple(v)) - zero)
+        return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -236,6 +327,7 @@ class Molecule:
     internal_rotors: tuple[InternalRotor, ...] = field(default_factory=tuple)
     electronic_levels: tuple[ElectronicLevel, ...] = field(default_factory=tuple)
     lennard_jones: LennardJones | None = None
+    anharmonicity: Anharmonicity | None = None
 
     def __post_init__(self) -> None:
         # frozen dataclass: use object.__setattr__ to derive SI molar mass.
@@ -278,6 +370,19 @@ class Molecule:
                 raise ValueError(
                     f"Nonlinear molecule {self.name}: expected {expected} internal modes (3N-6), "
                     f"got {n_osc} oscillators + {n_rot} internal rotors = {n_osc + n_rot}."
+                )
+
+        if self.anharmonicity is not None:
+            n_osc = sum(m.degeneracy for m in self.vibrational_modes)
+            if any(m.degeneracy != 1 for m in self.vibrational_modes):
+                raise ValueError(
+                    f"{self.name}: the anharmonic manifold is only defined for non-degenerate "
+                    "modes; a degenerate mode needs its own level counting."
+                )
+            if self.anharmonicity.n_modes != n_osc:
+                raise ValueError(
+                    f"{self.name}: anharmonicity describes {self.anharmonicity.n_modes} modes "
+                    f"but the molecule has {n_osc} oscillators."
                 )
 
         if not self.electronic_levels:

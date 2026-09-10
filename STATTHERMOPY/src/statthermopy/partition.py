@@ -26,7 +26,14 @@ from dataclasses import dataclass
 from .core.contribution import Contribution
 from .core.molecule import Molecule
 from .core.state import ResolvedState, State
-from .modes import Electronic, HinderedRotor, Rotational, Translational, Vibrational
+from .modes import (
+    AnharmonicVibrational,
+    Electronic,
+    HinderedRotor,
+    Rotational,
+    Translational,
+    Vibrational,
+)
 
 __all__ = ["PartitionFunction", "PartitionValues"]
 
@@ -76,7 +83,13 @@ class PartitionFunction:
             molecule.moments_of_inertia,
             use_quantum=use_quantum_rotation,
         )
-        self.vibrational = Vibrational(molecule.vibrational_modes)
+        # An anharmonic level manifold supersedes the harmonic oscillators when the species
+        # carries the spectroscopic constants for it; otherwise the harmonic path is used.
+        self.vibrational = (
+            AnharmonicVibrational(molecule.anharmonicity)
+            if molecule.anharmonicity is not None
+            else Vibrational(molecule.vibrational_modes)
+        )
         self.internal_rotation = HinderedRotor(molecule.internal_rotors)
         self.electronic = Electronic(molecule.electronic_levels)
 

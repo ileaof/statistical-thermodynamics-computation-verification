@@ -14,6 +14,20 @@ electronic_levels:
   - {energy_cm1: 0.0, degeneracy: 1}
 references: "Herzberg; NIST CCCDB. Nonlinear asymmetric top, sigma=2."
 
+# Second-order (Dunham) anharmonicity. Supersedes the harmonic oscillators above: the engine
+# sums over the real level manifold instead of equally spaced ladders. These are spectroscopic
+# constants, not property correlations — the core stays pure statistical mechanics.
+# Self-check: they reproduce the observed fundamentals 3657 / 1595 / 3756 cm-1 to <= 1.7 cm-1,
+# and give ZPE = 4634.6 cm-1. Mode order matches vibrational_modes above (nu1, nu2, nu3).
+anharmonicity:
+  harmonic_wavenumbers_cm1: [3832.17, 1648.47, 3942.53]   # omega_e, NOT the fundamentals
+  x_matrix_cm1:
+    - [-42.576, -15.933, -165.824]
+    - [-15.933, -16.813,  -20.332]
+    - [-165.824, -20.332, -46.370]
+  dissociation_cm1: 41000.0        # D0(H-OH) ~ 41145 cm-1; truncates the asymptotic expansion
+  reference: "Herzberg, Molecular Spectra II; NIST CCCBDB. omega_e and x_ij for H2O X1A1."
+
 lennard_jones:
   sigma_angstrom: 2.641
   epsilon_over_k: 809.1

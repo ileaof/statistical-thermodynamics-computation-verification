@@ -32,6 +32,23 @@ __all__ = ["NumbaBackend"]
 # Spectroscopic spec extraction (shared with OpenMP/CUDA backends)
 # ---------------------------------------------------------------------------
 
+def _kernel_unsupported(mol) -> bool:
+    """True if the compiled grid kernels cannot represent this molecule's internal motion.
+
+    The kernels model only *equally spaced harmonic* oscillators. Two cases must therefore fall
+    back to the exact per-temperature Python path, which owns the full mode set:
+
+    * hindered internal rotors (:class:`~statthermopy.modes.hindered_rotor.HinderedRotor`);
+    * an anharmonic level manifold
+      (:class:`~statthermopy.modes.anharmonic.AnharmonicVibrational`).
+
+    Returning ``None`` from ``molar_property_grid`` triggers that fallback, so every backend keeps
+    reporting identical physics — the project's invariant is that a backend changes the numerical
+    execution, never the model.
+    """
+    return _has_internal_rotors(mol) or getattr(mol, "anharmonicity", None) is not None
+
+
 def _has_internal_rotors(mol) -> bool:
     """True if the molecule carries hindered internal rotors.
 
@@ -333,8 +350,8 @@ class NumbaBackend(Backend):
     def molar_property_grid(self, mol, T_array, P, use_quantum, cutoff=150):
         from ..constants import N_A, R, h, k_B
 
-        if _has_internal_rotors(mol):
-            return None  # internal rotors aren't in the kernel; use the per-T Python path
+        if _kernel_unsupported(mol):
+            return None  # internal rotors / anharmonic manifold: use the per-T Python path
         _q_rot_jit, _props_at_T, molar_props_jit = _kernels()
         spec = _extract_spec(mol)
         T_arr = np.asarray(T_array, dtype=np.float64)

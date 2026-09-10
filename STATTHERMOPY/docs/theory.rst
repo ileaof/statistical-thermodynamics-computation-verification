@@ -168,7 +168,9 @@ Hypotheses, limitations, validity
 
 * Ideal gas — no intermolecular interactions; valid away from condensation/liquefaction (the
   transport layer adds the dilute-gas Chapman–Enskog coefficients on top of this engine).
-* Born–Oppenheimer + rigid rotor + harmonic oscillator separability.
+* Born–Oppenheimer + rigid rotor + harmonic oscillator separability. Where second-order
+  anharmonicity constants are available the harmonic ladder is replaced by an explicit sum over
+  the real vibrational manifold (currently H2O); see ``THEORY.md`` §4c.
 * Maxwell–Boltzmann (non-degenerate) statistics; fails for He at very low :math:`T`/high density.
 * Spectroscopic constants from McQuarrie, Herzberg, NIST CCCDB.
 

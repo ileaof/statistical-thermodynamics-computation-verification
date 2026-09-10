@@ -1,5 +1,6 @@
 """Partition-function contribution modes."""
 
+from .anharmonic import AnharmonicVibrational
 from .base import Mode
 from .electronic import Electronic
 from .hindered_rotor import HinderedRotor
@@ -12,6 +13,7 @@ __all__ = [
     "Translational",
     "Rotational",
     "Vibrational",
+    "AnharmonicVibrational",
     "HinderedRotor",
     "Electronic",
     "rotational_temperature",

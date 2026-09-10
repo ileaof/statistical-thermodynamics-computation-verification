@@ -21,7 +21,7 @@ import warnings
 import numpy as np
 
 from .executor import Backend
-from .numba_backend import NumbaBackend, _extract_spec, _has_internal_rotors
+from .numba_backend import NumbaBackend, _extract_spec, _kernel_unsupported
 
 __all__ = ["CudaBackend"]
 
@@ -249,8 +249,8 @@ class CudaBackend(Backend):
         return self._qsum.linear_quantum_moments(theta_rot, T, cutoff)
 
     def molar_property_grid(self, mol, T_array, P, use_quantum, cutoff=150):
-        if _has_internal_rotors(mol):
-            return None  # internal rotors aren't in the kernel; use the per-T Python path
+        if _kernel_unsupported(mol):
+            return None  # internal rotors / anharmonic manifold: use the per-T Python path
         if self._cpu is not None:
             return self._cpu.molar_property_grid(mol, T_array, P, use_quantum, cutoff)
         return self._molar_property_grid_gpu(mol, T_array, P, use_quantum, cutoff)  # pragma: no cover - GPU

@@ -142,7 +142,7 @@ STATTHERMOPY/
 │   ├── plots/  cli/  gui/            plotting · REPL+run · PySide6 GUI
 │   └── equilibrium/   architecture placeholder (future phase)
 ├── examples/          runnable scripts + demo notebook + output figures
-├── tests/             pytest suite (268 tests, ~96% coverage)
+├── tests/             pytest suite (545 tests, ~96% coverage)
 └── docs/              THEORY.md + Sphinx sources
 ```
 

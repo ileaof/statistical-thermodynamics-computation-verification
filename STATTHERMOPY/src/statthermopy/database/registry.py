@@ -37,6 +37,7 @@ import yaml
 
 from ..constants import h, k_B
 from ..core.molecule import (
+    Anharmonicity,
     ElectronicLevel,
     Geometry,
     InternalRotor,
@@ -101,6 +102,19 @@ def load_molecule(data: dict) -> Molecule:
             note=str(lj_data.get("note", "")),
         )
 
+    anh_block = data.get("anharmonicity")
+    anharmonicity = None
+    if anh_block:
+        rows = [[float(v) for v in row] for row in anh_block["x_matrix_cm1"]]
+        anharmonicity = Anharmonicity(
+            harmonic_wavenumbers_cm1=tuple(
+                float(w) for w in anh_block["harmonic_wavenumbers_cm1"]
+            ),
+            x_matrix_cm1=tuple(tuple(r) for r in rows),
+            dissociation_cm1=float(anh_block["dissociation_cm1"]),
+            reference=str(anh_block.get("reference", "")),
+        )
+
     return Molecule(
         name=str(data["name"]),
         formula=str(data.get("formula", data["name"])),
@@ -113,6 +127,7 @@ def load_molecule(data: dict) -> Molecule:
         internal_rotors=rotors,
         electronic_levels=elec_levels,
         lennard_jones=lennard_jones,
+        anharmonicity=anharmonicity,
     )
 
 

@@ -2,11 +2,16 @@
 
 Locks in every finding of ``docs/H2O_AUDIT.md``. The audit concluded that the engine has **no**
 implementation, unit, constant, formula, standard-state or energy-zero error, and that the residual
-deviation from thermochemical tables has two physical origins outside the code:
+deviation from thermochemical tables had two physical origins outside the code:
 
 * a flat ``-0.32 %`` floor on Cp below ~600 K — centrifugal distortion and vibration-rotation
   coupling, absent from the rigid rotor;
 * a term growing to ``-1.90 %`` at 2000 K — anharmonicity, absent from the harmonic oscillator.
+
+The second was then removed (audit section 15): water now sums the anharmonic level manifold built
+from its spectroscopic omega/x_ij constants, which cuts the 2000 K deficit to ``-0.57 %`` and the
+validation-layer mean from 0.81 % to 0.38 %. The first remains — exact quantum rotation is 65x too
+small to explain it, and the truncated centrifugal expansion does not converge.
 
 The tests are organised so that a future regression is attributable:
 
@@ -16,6 +21,7 @@ The tests are organised so that a future regression is attributable:
 4. standard state and unit conversions (``TestConventions``)
 5. absolute values against tabulated references (``TestAgainstReferences``)
 6. the error *signature* that proves the cause (``TestErrorSignature``)
+7. the anharmonic machinery added in response (``TestAnharmonicManifold``)
 
 Everything in 1-6 runs offline with no optional dependency. Cross-checks against ``iapws`` and
 ``thermo`` are in ``TestExternalCrossChecks`` and skip when those packages are absent.
@@ -27,8 +33,8 @@ import math
 
 import pytest
 
-from statthermopy import Thermodynamics, State
-from statthermopy.constants import R, N_A, k_B, h
+from statthermopy import State, Thermodynamics
+from statthermopy.constants import N_A, R, h, k_B
 from statthermopy.core.molecule import Geometry
 from statthermopy.database import get
 from statthermopy.units import CM1_TO_K
@@ -45,8 +51,8 @@ NIST_S = {500.0: 206.5341, 800.0: 223.8251, 1000.0: 232.7400, 1500.0: 250.6198, 
 # Audit section 9: 63.3059 J/mol/K measured, 63.338 from the CODATA route.
 ENTROPY_OFFSET_J_MOL_K = 63.306
 # Enthalpy offset to the same scale: triple-point latent heat minus the ideal gas's thermal
-# enthalpy there. Audit section 9.2: -1997.852 kJ/kg by regression, 1996.944 from the triple point.
-ENTHALPY_OFFSET_KJ_KG = -1997.852
+# enthalpy there. Audit section 9.2: -1997.870 kJ/kg by regression, 1996.946 from the triple point.
+ENTHALPY_OFFSET_KJ_KG = -1997.870
 MOLAR_MASS_KG_MOL = 0.01801528
 
 
@@ -103,7 +109,7 @@ class TestMolecularData:
 
     def test_wavenumber_to_kelvin_conversion(self):
         """CM1_TO_K = h c / k_B with c in cm/s; CODATA 2018 gives 1.4387768775 K/cm^-1."""
-        assert CM1_TO_K == pytest.approx(1.4387768775, rel=1e-9)
+        assert pytest.approx(1.4387768775, rel=1e-9) == CM1_TO_K
 
     def test_vibrational_temperatures(self, h2o):
         thetas = sorted(m.wavenumber_cm1 * CM1_TO_K for m in h2o.vibrational_modes)
@@ -185,13 +191,45 @@ class TestModeContributions:
     def test_rotational_heat_capacity_is_three_halves_R(self, h2o):
         assert self._contribs(h2o)["rotational"].Cv_m == pytest.approx(1.5 * R, rel=1e-12)
 
-    def test_vibrational_is_a_sum_of_einstein_oscillators(self, h2o):
-        total = 0.0
-        for w in (3657.0, 1595.0, 3756.0):
-            x = w * CM1_TO_K / self.T
-            e = math.exp(-x)
-            total += R * (x * e / (1 - e) - math.log1p(-e))
-        assert self._contribs(h2o)["vibrational"].S_m == pytest.approx(total, abs=1e-12)
+    def test_vibrational_is_the_anharmonic_manifold_sum(self, h2o):
+        """H2O now sums the real level manifold, so the Einstein form no longer applies to it.
+
+        Recomputed here from the stored constants, independently of the mode implementation.
+        """
+        anh = h2o.anharmonicity
+        assert anh is not None, "H2O should carry anharmonicity constants"
+        zero = anh.zero_point_energy_cm1
+        levels = []
+        for v1 in range(40):
+            for v2 in range(60):
+                for v3 in range(40):
+                    e = anh.term_value_cm1((v1, v2, v3)) - zero
+                    if 0.0 <= e <= anh.dissociation_cm1:
+                        # local monotonicity, as the mode applies
+                        ok = True
+                        for i, vi in enumerate((v1, v2, v3)):
+                            if vi:
+                                low = [v1, v2, v3]
+                                low[i] = vi - 1
+                                if anh.term_value_cm1(tuple(low)) - zero >= e:
+                                    ok = False
+                                    break
+                        if ok:
+                            levels.append(e * CM1_TO_K)
+        q = sum(math.exp(-t / self.T) for t in levels)
+        mean = sum(t * math.exp(-t / self.T) for t in levels) / q
+        expected = R * (math.log(q) + mean / self.T)
+        assert self._contribs(h2o)["vibrational"].S_m == pytest.approx(expected, rel=1e-10)
+
+    def test_harmonic_path_is_still_einstein_for_species_without_constants(self):
+        """A species with no anharmonicity block must keep the exact harmonic behaviour."""
+        n2 = get("N2")
+        assert n2.anharmonicity is None
+        st = State(T=self.T, P=self.P)
+        got = Thermodynamics(n2, st).partition.contributions(st)["vibrational"].S_m
+        x = n2.vibrational_modes[0].wavenumber_cm1 * CM1_TO_K / self.T
+        e = math.exp(-x)
+        assert got == pytest.approx(R * (x * e / (1 - e) - math.log1p(-e)), abs=1e-12)
 
     def test_electronic_contributes_nothing(self, h2o):
         c = self._contribs(h2o)["electronic"]
@@ -326,11 +364,19 @@ class TestErrorSignature:
         # The residual changes by less than 30 % while Cv_vib changes by more than 400 %.
         assert 0.7 < r500 / r300 < 1.3, f"residual ratio {r500 / r300:.2f} — floor is not flat"
 
-    def test_high_temperature_error_grows(self, h2o):
-        """Anharmonicity: the deficit must increase monotonically with temperature."""
-        errs = [abs(_res(h2o, T).Cp_m - NIST_CP[T]) / NIST_CP[T] for T in (800.0, 1000.0, 1500.0, 2000.0)]
-        assert errs == sorted(errs), f"anharmonic deficit not monotonic: {errs}"
-        assert errs[-1] > 0.015, "expected ~1.9 % at 2000 K"
+    def test_anharmonicity_removed_the_high_temperature_growth(self, h2o):
+        """Audit section 15 — the anharmonic manifold flattened the high-T deficit.
+
+        With the harmonic ladder the error grew to -1.90 % at 2000 K. Summing the real levels
+        holds it near the rotational floor across the whole range. Guarding both ends: it must
+        stay well below the old figure, and must not have been over-corrected past the reference.
+        """
+        errs = {T: (_res(h2o, T).Cp_m - NIST_CP[T]) / NIST_CP[T] for T in sorted(NIST_CP)}
+        assert all(e < 0.0 for e in errs.values()), "RRHO cannot over-predict Cp"
+        assert abs(errs[2000.0]) < 0.008, f"2000 K deficit {errs[2000.0]:.4%} — expected ~0.57 %"
+        assert abs(errs[2000.0]) < 0.5 * 0.0195, "should be far better than the harmonic -1.95 %"
+        # The residual is now dominated by the flat rotational floor, so the spread is small.
+        assert max(errs.values()) - min(errs.values()) < 0.005
 
     def test_symmetry_error_magnitude_is_excluded(self, h2o):
         """A wrong sigma would move S by R ln 2 = 5.76 J/mol/K, 50x the observed residual."""
@@ -443,7 +489,7 @@ class TestExternalCrossChecks:
         Tt = 273.16
         h_ideal = iapws.IAPWS95(T=Tt, rho=1.0 * MOLAR_MASS_KG_MOL / (R * Tt)).h
         h_thermal = _res(h2o, Tt).H_s / 1000.0
-        # 1996.944 kJ/kg, within 0.05 % of the 1997.852 obtained by regression at 423 K.
+        # 1996.946 kJ/kg, within 0.05 % of the 1997.870 obtained by regression at 423 K.
         assert h_ideal - h_thermal == pytest.approx(-ENTHALPY_OFFSET_KJ_KG, rel=1e-3)
 
         # And it must decompose exactly into the physical pieces. h(liquid) is 6e-4 kJ/kg rather
@@ -472,3 +518,125 @@ class TestExternalCrossChecks:
         for v in vals:
             assert eng < v, "engine must under-predict every source"
             assert abs(eng - v) / v < 0.02
+
+
+# ------------------------------------------------------------- 8. anharmonic machinery
+
+
+class TestAnharmonicManifold:
+    """Audit section 15 — the anharmonic vibrational mode added in response to the audit."""
+
+    def test_constants_reproduce_the_observed_fundamentals(self, h2o):
+        """The self-check that validates the constant set without any external table.
+
+        The fundamentals are a consequence of omega and x_ij; if they did not come out right, the
+        constants would be wrong or in the wrong order.
+        """
+        predicted = h2o.anharmonicity.fundamentals_cm1()
+        observed = tuple(m.wavenumber_cm1 for m in h2o.vibrational_modes)
+        assert len(predicted) == len(observed)
+        for p, o in zip(predicted, observed):
+            assert abs(p - o) < 2.0, f"fundamental {p:.2f} vs observed {o:.2f} cm^-1"
+
+    def test_zero_point_energy(self, h2o):
+        """G(0,0,0) = 4634.6 cm^-1 for water."""
+        assert h2o.anharmonicity.zero_point_energy_cm1 == pytest.approx(4634.6, abs=1.0)
+
+    def test_levels_start_at_the_ground_state(self, h2o):
+        """The manifold is measured from G(0), so the lowest level is exactly zero."""
+        st = State(T=500.0, P=1e5)
+        theta = Thermodynamics(h2o, st).partition.vibrational.theta
+        assert min(theta) == pytest.approx(0.0, abs=1e-9)
+        assert len(theta) > 100, "manifold suspiciously small"
+
+    def test_anharmonic_exceeds_harmonic_at_high_temperature(self, h2o):
+        """Closing level spacing means more populated states, hence a larger Cv."""
+        from statthermopy.modes import Vibrational
+
+        st = State(T=2000.0, P=1e5)
+        rs = st.resolve(h2o.molar_mass)
+        anh = Thermodynamics(h2o, st).partition.vibrational.contribution(rs)
+        harm = Vibrational(h2o.vibrational_modes).contribution(rs)
+        assert anh.Cv_m > harm.Cv_m
+        assert anh.S_m > harm.S_m
+
+    def test_anharmonic_and_harmonic_agree_when_vibration_is_frozen(self, h2o):
+        """At low T only the ground level is populated, so the two models must coincide."""
+        from statthermopy.modes import Vibrational
+
+        st = State(T=50.0, P=1e5)
+        rs = st.resolve(h2o.molar_mass)
+        anh = Thermodynamics(h2o, st).partition.vibrational.contribution(rs)
+        harm = Vibrational(h2o.vibrational_modes).contribution(rs)
+        assert anh.Cv_m == pytest.approx(harm.Cv_m, abs=1e-9)
+        assert anh.S_m == pytest.approx(harm.S_m, abs=1e-9)
+
+    def test_identities_still_hold_on_the_anharmonic_path(self, h2o):
+        """Adding a mode must not break the thermodynamic identities."""
+        for T in (298.15, 1000.0, 2000.0):
+            r = _res(h2o, T)
+            assert r.Cp_m - r.Cv_m == pytest.approx(R, abs=1e-12)
+            assert r.H_m - r.U_m == pytest.approx(R * T, rel=1e-12)
+            d = 0.01
+            num = (_res(h2o, T + d).H_m - _res(h2o, T - d).H_m) / (2 * d)
+            assert r.Cp_m == pytest.approx(num, rel=1e-6)
+
+    def test_validation_layer_improved(self):
+        """The whole point: the embedded NIST comparison must be markedly better."""
+        from statthermopy.validation import validate
+
+        cp = validate("H2O", "Cp")
+        # Harmonic gave 0.808 % mean / 1.947 % max.
+        assert cp.mean_abs_error_percent < 0.5
+        assert cp.max_abs_error_percent < 0.8
+
+    def test_only_water_carries_anharmonicity_so_far(self):
+        """Every other species must keep the harmonic path — no silent change elsewhere."""
+        from statthermopy.database import list_molecules
+
+        with_anh = [n for n in list_molecules() if get(n).anharmonicity is not None]
+        assert with_anh == ["H2O"], f"unexpected anharmonic species: {with_anh}"
+
+    def test_degenerate_modes_are_rejected(self):
+        """The manifold's level counting is only defined for non-degenerate modes."""
+        from statthermopy.core.molecule import Anharmonicity, Geometry, Molecule, VibrationalMode
+
+        with pytest.raises(ValueError, match="non-degenerate"):
+            Molecule(
+                name="X", formula="X", molar_mass_gmol=16.0, geometry=Geometry.NONLINEAR,
+                n_atoms=3, symmetry_number=1, moments_of_inertia=(1e-46, 2e-46, 3e-46),
+                vibrational_modes=(VibrationalMode(1000.0, 3),),
+                anharmonicity=Anharmonicity((1000.0,), ((-10.0,),), 30000.0),
+            )
+
+    def test_mode_count_mismatch_is_rejected(self):
+        from statthermopy.core.molecule import Anharmonicity, Geometry, Molecule, VibrationalMode
+
+        with pytest.raises(ValueError, match="anharmonicity describes"):
+            Molecule(
+                name="X", formula="X", molar_mass_gmol=18.0, geometry=Geometry.NONLINEAR,
+                n_atoms=3, symmetry_number=2, moments_of_inertia=(1e-46, 2e-46, 3e-46),
+                vibrational_modes=(VibrationalMode(1000.0), VibrationalMode(2000.0),
+                                   VibrationalMode(3000.0)),
+                anharmonicity=Anharmonicity((1000.0,), ((-10.0,),), 30000.0),
+            )
+
+    def test_backends_agree_on_the_anharmonic_species(self, h2o):
+        """The engine's invariant: a backend changes execution, never the model.
+
+        The compiled grid kernels only know harmonic ladders, so they must decline this molecule
+        and defer to the reference path rather than silently returning harmonic numbers.
+        """
+        from statthermopy.backend import available_backends, get_backend, set_backend
+
+        original = get_backend().name
+        try:
+            point = [_res(h2o, T).Cp_m for T in (298.15, 1000.0, 2000.0)]
+            for name in available_backends():
+                set_backend(name)
+                th = Thermodynamics(h2o, State(T=298.15, P=1e5))
+                _, grid = th.property_vs_T("Cp_m", [298.15, 1000.0, 2000.0], P=1e5)
+                for a, b in zip(point, grid):
+                    assert a == pytest.approx(b, rel=1e-12), f"backend {name} diverges"
+        finally:
+            set_backend(original)
