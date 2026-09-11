@@ -785,6 +785,11 @@ class StatThermoPyShell(Cmd):
                 continue        # no trace species named; reported per species below
             unit = AIR_TRANSPORT_UNITS.get(prop, "")
             label = AIR_TRANSPORT_LABELS.get(prop, prop)
+            if prop == "D_eff" and res.trace_species and not res.label:
+                # The air wording names both the tracer and the medium ("Water-vapour
+                # diffusivity in air"); for an unlabelled mixture with a user-named
+                # tracer neither half is necessarily true.
+                label = f"D({res.trace_species}) in the mixture"
             print(f"    {label:30s} = {val:14.6g}  {unit}")
         if res.trace_species:
             print(f"    (D_eff, Sc and Le are for the trace species {res.trace_species})")

@@ -8,6 +8,7 @@ single ``--gas``. These tests pin the new route: any composition, one-shot or in
 from __future__ import annotations
 
 import io as _io
+import re
 
 import pytest
 
@@ -58,6 +59,19 @@ class TestOneShotMixtureTransport:
         assert "Schmidt number" in out
         assert "trace species H2O" in out
 
+    def test_trace_label_does_not_claim_the_medium_is_air(self, capsys):
+        """The air wording names both the tracer and the medium; a biogas is neither."""
+        out = _run(
+            capsys,
+            ["transport", "--mixture", "CH4:0.6", "CO2:0.4", "--trace", "H2O", "--T", "300"],
+        )
+        assert "D(H2O) in the mixture" in out
+        assert "in air" not in out
+
+    def test_a_named_fluid_with_a_tracer_keeps_the_air_wording(self, capsys):
+        out = _run(capsys, ["airtransport", "--T", "300"])
+        assert "Water-vapour diffusivity in air" in out
+
     def test_asking_for_sc_without_a_trace_explains_how(self, capsys):
         out = _run(
             capsys, ["transport", "--mixture", "CO2:0.5", "CH4:0.5", "--prop", "Sc", "--T", "300"]
@@ -98,6 +112,61 @@ class TestOneShotMixtureTransport:
     def test_binary_diffusion_still_works(self, capsys):
         out = _run(capsys, ["transport", "--gas", "N2", "--binary", "N2", "O2", "--T", "300"])
         assert "D(N2,O2)" in out
+
+
+class TestTraceAmountsAreNotZero:
+    """``composition (mole)`` prints four decimals, so a ppm species shows as ``0.0000``.
+
+    Help.html documents the per-species table as the authority on who is in the mixture; these
+    pin that distinction, which is otherwise invisible in the header.
+    """
+
+    BIOGAS = ["CH4:0.557", "CO2:0.439", "O2:0.004", "H2S:0.000045", "CO:0.000009"]
+
+    @staticmethod
+    def _contributions(out):
+        return out.split("Per-species contributions")[1]
+
+    @staticmethod
+    def _row(body, name):
+        return re.search(rf"^\s+{name}\s+\d", body, re.M) is not None
+
+    def test_a_species_rounded_to_zero_is_still_computed(self, capsys):
+        out = _run(capsys, ["transport", "--mixture", *self.BIOGAS, "--T", "300"])
+        assert "H2S=0.0000" in out and "CO=0.0000" in out
+        body = self._contributions(out)
+        assert self._row(body, "H2S")
+        assert self._row(body, "CO")
+
+    def test_a_true_zero_is_dropped_from_the_table(self, capsys):
+        spec = [s if not s.startswith("H2S") else "H2S:0" for s in self.BIOGAS]
+        body = self._contributions(_run(capsys, ["transport", "--mixture", *spec, "--T", "300"]))
+        assert not self._row(body, "H2S")
+        assert self._row(body, "CO")
+
+    def test_the_traces_are_computed_though_below_printed_precision(self):
+        """45 ppm of H2S and 9 ppm of CO move mu in the 7th significant digit: real, unprintable.
+
+        Help.html quotes these magnitudes, so pin them at the engine rather than at the CLI,
+        whose six printed digits cannot resolve the difference.
+        """
+        from statthermopy import State
+        from statthermopy.mixture import IdealGasMixture
+        from statthermopy.transport.air import MixtureTransportCalculator
+
+        state = State(T=300.0, P=101325.0)
+        full = {"CH4": 0.557, "CO2": 0.439, "O2": 0.004, "H2S": 0.000045, "CO": 0.000009}
+        without = {k: v for k, v in full.items() if k not in ("H2S", "CO")}
+
+        def mu_k(spec):
+            res = MixtureTransportCalculator(IdealGasMixture.from_names(spec)).compute(state)
+            return res.mu, res.k
+
+        mu_a, k_a = mu_k(full)
+        mu_b, k_b = mu_k(without)
+        assert mu_a != mu_b and k_a != k_b           # the traces really are in the sum
+        assert abs(mu_b / mu_a - 1.0) < 1.0e-5       # but orders below the ±4% band
+        assert abs(k_b / k_a - 1.0) < 1.0e-4
 
 
 class TestOneShotErrors:

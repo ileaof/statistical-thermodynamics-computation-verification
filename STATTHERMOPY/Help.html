@@ -194,6 +194,7 @@ h2{
 }
 h3{ font-size:1.17rem; margin:2rem 0 .6rem; }
 h4{ font-size:1.02rem; margin:1.5rem 0 .45rem; color:var(--accent); }
+h5{ font-size:1rem; margin:1.4rem 0 .4rem; font-family:var(--serif); color:var(--accent); }
 
 p{ margin:0 0 1rem; }
 
@@ -1429,6 +1430,407 @@ statthermopy transport --mixture CO2:0.5 CH4:0.5 --prop k     --Tmin 300 --Tmax 
 <p><code>transport binary</code> nomeia sempre o próprio par de gases puros, então continua
 funcionando com ou sem mistura selecionada. Selecionar um gás com <code>gas N2</code> volta ao
 caminho de gás puro.</p>
+
+<h4>Exemplo completo: biogás de cinco componentes</h4>
+
+<p><strong>Objetivo.</strong> Levar a mistura genérica a um caso real completo: um biogás
+de digestor, com CH<sub>4</sub> e CO<sub>2</sub> majoritários, O<sub>2</sub> residual de
+infiltração de ar e H<sub>2</sub>S e CO em traço. O exemplo exercita, de uma vez, o
+fecho do balanço de uma análise cromatográfica, uma mistura de cinco componentes,
+uma espécie fortemente polar, duas espécies em ppm, e a ligação entre os dois
+subcomandos que você vai usar juntos na prática: <code>transport</code> e
+<code>run</code>.</p>
+
+<h5>Parte 1 &mdash; propriedades de transporte</h5>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --mixture CH4:0.557 CO2:0.439 O2:0.004 H2S:0.000045 CO:0.000009 --T 300 --P 101325</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Mixture transport — CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=0.0000, CO=0.0000 @ T=300.0000 K, P=101325 Pa
+    composition (mole): CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=0.0000, CO=0.0000
+    mixing rules: mu=Wilke, k=Mason-Saxena, D_im=Blanc
+    Dynamic viscosity              =    1.33454e-05  Pa·s
+    Kinematic viscosity            =    1.15743e-05  m^2/s
+    Thermal conductivity           =      0.0228345  W/m/K
+    Thermal diffusivity            =    1.54824e-05  m^2/s
+    Prandtl number                 =        0.74758  -
+    Density                        =        1.15302  kg/m^3
+    Specific gas constant          =        292.927  J/kg/K
+    Speed of sound                 =        337.609  m/s
+    Thermal expansion coefficient  =     0.00333333  1/K
+    Isothermal compressibility     =    9.86923e-06  1/Pa
+    Heat-capacity ratio            =        1.29702  -
+    validated accuracy: viscosity ±4%, conductivity ±5.1%, diffusion ±6.3%
+  --- Per-species contributions ---
+    Species         x          mu_i         k_i          D_im      Sc_i    mu_contrib   k_contrib
+    CH4       0.5570    1.0495e-05  3.2744e-02    1.6423e-05    0.7047    5.1720e-06  1.1592e-02
+    CO2       0.4390    1.5186e-05  1.7565e-02    1.6380e-05    0.7066    8.1009e-06  1.1135e-02
+    O2        0.0040    2.0569e-05  2.6427e-02    1.8345e-05    0.6309    7.1714e-08  1.0622e-04
+    H2S       0.0000    1.2889e-05  1.6862e-02    1.4352e-05    0.8065    6.6611e-10  9.8106e-07
+    CO        0.0000    1.7684e-05  2.5329e-02    1.8282e-05    0.6331    1.4030e-10  2.1890e-07</pre>
+</div>
+
+<div class="callout warn">
+  <span class="label">Um <code>0.0000</code> impresso não quer dizer espécie ausente</span>
+  H<sub>2</sub>S (4,5 × 10⁻⁵) e CO (9 × 10⁻⁶) aparecem como
+  <code>0.0000</code> no cabeçalho e na linha <code>composition (mole)</code> simplesmente
+  porque esses campos são impressos com quatro casas decimais. As duas espécies
+  <em>estão</em> na conta, com as frações que você digitou: a tabela de
+  contribuições mostra o μ<sub><em>i</em></sub>, o
+  <em>k</em><sub><em>i</em></sub> e o D<sub><em>im</em></sub> de cada uma.
+  <p style="margin:.7rem 0 0;">Como distinguir de um zero de verdade: uma espécie com
+  fração exatamente nula é removida da mistura e <strong>desaparece da tabela de
+  contribuições</strong>. Rodando o mesmo caso com <code>H2S:0</code>, sobram quatro
+  linhas:</p>
+  <div class="output" style="margin:.7rem 0 0;">
+    <div class="outhead">saída de <code>... O2:0.004 H2S:0 CO:0.000009 ...</code> (final)</div>
+<pre>  --- Per-species contributions ---
+    Species         x          mu_i         k_i          D_im      Sc_i    mu_contrib   k_contrib
+    CH4       0.5570    1.0495e-05  3.2744e-02    1.6423e-05    0.7048    5.1723e-06  1.1592e-02
+    CO2       0.4390    1.5186e-05  1.7565e-02    1.6380e-05    0.7066    8.1013e-06  1.1136e-02
+    O2        0.0040    2.0569e-05  2.6427e-02    1.8345e-05    0.6309    7.1718e-08  1.0622e-04
+    CO        0.0000    1.7684e-05  2.5329e-02    1.8282e-05    0.6331    1.4031e-10  2.1891e-07</pre>
+  </div>
+  A linha do H<sub>2</sub>S sumiu &mdash; e o CO, que continua em 9 ppm, segue listado com
+  <code>0.0000</code>. <strong>A tabela de contribuições é a fonte
+  autoritária de quem está na mistura</strong>, não a linha de composição.
+</div>
+
+<h5>O balanço fecha, e o programa confirma o que usou</h5>
+
+<p>As frações somam 0,557 + 0,439 + 0,004 + 0,000045 + 0,000009 =
+<strong>1,000054</strong>, ou seja, fecham com 54 ppm de sobra &mdash; típico de uma
+análise cromatográfica bem fechada. O programa normaliza de qualquer modo e ecoa a
+composição efetivamente usada na linha <code>composition (mole)</code>. Aqui a
+correção é invisível nas quatro casas impressas (CH<sub>4</sub> vai de 0,557
+para 0,556970). Essa linha não é decoração: quando a análise
+<em>não</em> fecha, ela é a única forma de ver o que entrou no cálculo. Se a
+diferença entre o digitado e o ecoado exceder o arredondamento do seu laudo, o problema
+está no dado de entrada.</p>
+
+<h5>As contribuições somam o total</h5>
+
+<p>As colunas <code>mu_contrib</code> e <code>k_contrib</code> não são estimativas:
+são as parcelas em que a própria regra de mistura decompõe o resultado.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>5,1720e-06 + 8,1009e-06 + 7,1714e-08 + 6,6611e-10 + 1,4030e-10 = 1,33454e-05 Pa·s   (= μ)
+1,1592e-02 + 1,1135e-02 + 1,0622e-04 + 9,8106e-07 + 2,1890e-07 = 2,28344e-02 W/m·K  (= k)</code></pre>
+</div>
+
+<p>O total de <em>k</em> impresso é 0,0228345; a unidade de diferença no último
+dígito vem do arredondamento das próprias parcelas exibidas, não do cálculo.
+É essa tabela que responde à pergunta de engenharia &mdash; <em>quem</em> governa o
+transporte. Aqui o CO<sub>2</sub>, com 43,9% das moléculas, responde por <strong>60,7% da
+viscosidade</strong>; o CH<sub>4</sub>, com 55,7% das moléculas, responde por
+<strong>50,8% da condutividade</strong>.</p>
+
+<h5>Nenhuma das duas propriedades é a média molar</h5>
+
+<p>Este é o ponto central de uma regra de mistura, e o exemplo o mostra nos dois sentidos ao
+mesmo tempo. Comparando com a média ponderada pelas frações molares das
+propriedades puras:</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Regra de mistura <em>versus</em> média molar simples, a 300 K e 1 atm.</caption>
+    <thead>
+      <tr><th>Propriedade</th><th>Média molar Σ<em>x<sub>i</sub></em>·φ<em><sub>i</sub></em></th><th>Regra de mistura</th><th>Desvio</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>μ</td><td>1,25947 × 10⁻⁵ Pa·s</td><td>1,33454 × 10⁻⁵ Pa·s (Wilke)</td><td><strong>+6,0%</strong></td></tr>
+      <tr><td><em>k</em></td><td>0,026055 W/m·K</td><td>0,022835 W/m·K (Mason–Saxena)</td><td><strong>−12,4%</strong></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Os sinais são <em>opostos</em>, e não por acaso. As duas regras usam a mesma estrutura
+de pesos φ<sub><em>ij</em></sub>, que em ambos os casos <strong>favorece a espécie pesada
+e desconta a leve</strong> &mdash; dá para ler isso direto da tabela de
+contribuições, comparando cada <code>contrib</code> com o produto ingênuo
+<em>x<sub>i</sub></em>·φ<em><sub>i</sub></em>:</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>O peso φ<sub><em>ij</em></sub> age na mesma direção nas duas propriedades.</caption>
+    <thead>
+      <tr><th>Parcela</th><th><em>x<sub>i</sub></em>·φ<em><sub>i</sub></em> (ingênuo)</th><th>Impresso</th><th>Efeito do peso</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>μ, CO<sub>2</sub> (pesado)</td><td>6,6663 × 10⁻⁶</td><td>8,1009 × 10⁻⁶</td><td>+21,5%</td></tr>
+      <tr><td>μ, CH<sub>4</sub> (leve)</td><td>5,8454 × 10⁻⁶</td><td>5,1720 × 10⁻⁶</td><td>−11,5%</td></tr>
+      <tr><td><em>k</em>, CO<sub>2</sub> (pesado)</td><td>7,7106 × 10⁻³</td><td>1,1135 × 10⁻²</td><td>+44,4%</td></tr>
+      <tr><td><em>k</em>, CH<sub>4</sub> (leve)</td><td>1,8237 × 10⁻²</td><td>1,1592 × 10⁻²</td><td>−36,4%</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>O que muda entre as duas propriedades é <em>qual</em> espécie carrega o valor maior. Em
+viscosidade, o pesado é também o mais viscoso (CO<sub>2</sub>: 1,52 × 10⁻⁵
+contra 1,05 × 10⁻⁵ do CH<sub>4</sub>), então favorecer o pesado empurra μ
+<em>para cima</em>. Em condutividade a ordem se inverte &mdash; o leve é o mais condutivo
+(CH<sub>4</sub>: 0,0327 contra 0,0176 W/m·K do CO<sub>2</sub>), porque uma molécula leve
+é rápida e transporta energia interna bem &mdash; então o mesmo peso empurra
+<em>k</em> <em>para baixo</em>. Trocar a regra de mistura por uma média molar erraria 6% num
+sentido e 12% no outro.</p>
+
+<h5>Com três ou mais componentes, cada espécie tem seu próprio D e seu próprio Sc</h5>
+
+<p>No binário CO<sub>2</sub>/CH<sub>4</sub> da seção anterior,
+<code>D_CO₂,m = D_CH₄,m</code> e as duas espécies compartilhavam o mesmo Sc &mdash;
+a lei de Blanc se reduz a <em>D<sub>AB</sub></em>. Com cinco componentes isso deixa de valer: a
+coluna <code>D_im</code> vai de 1,4352 × 10⁻⁵ (H<sub>2</sub>S) a 1,8345 ×
+10⁻⁵ m²/s (O<sub>2</sub>), e <code>Sc_i</code> de 0,6309 a 0,8065. Num
+cálculo de combustão ou de dispersão isso importa: adotar um único Sc para todas
+as espécies, prática comum, embute aqui uma diferença de até
+<strong>27,8%</strong> na difusão relativa entre elas.</p>
+
+<h5>Os traços: irrelevantes para o escoamento, decisivos para o processo</h5>
+
+<p>Vale medir o quanto as espécies em ppm de fato pesam no resultado:</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Peso de cada traço na viscosidade da mistura e na banda de acurácia.</caption>
+    <thead>
+      <tr><th>Espécie</th><th><em>x</em></th><th>Contribuição a μ</th><th>Fração de μ</th><th>Banda individual de <em>k</em></th><th>Aporte à banda da mistura</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>H<sub>2</sub>S</td><td>4,5 × 10⁻⁵</td><td>6,6611 × 10⁻¹⁰ Pa·s</td><td>1 parte em 20 000</td><td>±18,7%</td><td>0,0008 ponto percentual</td></tr>
+      <tr><td>CO</td><td>9 × 10⁻⁶</td><td>1,4030 × 10⁻¹⁰ Pa·s</td><td>1 parte em 95 000</td><td>±1,3%</td><td>desprezível</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Do ponto de vista fluidodinâmico isso é desprezível. Removendo as duas espécies da
+mistura, μ passa de 1,334540 × 10⁻⁵ a 1,334539 × 10⁻⁵ Pa·s &mdash; o <em>sétimo</em>
+dígito significativo &mdash; e <em>k</em> de 2,283446 × 10⁻² a 2,283481 × 10⁻² W/m·K,
+o quinto. Ambos ficam abaixo da precisão que o comando imprime, e de três a quatro ordens
+de grandeza abaixo das próprias bandas de acurácia (±4% e ±5,1%).</p>
+
+<p>Repare que esse efeito é bem menor do que a &ldquo;1 parte em 20 000&rdquo; da tabela acima, e
+não há contradição: a coluna <code>mu_contrib</code> mede a <em>parcela</em> do H<sub>2</sub>S no
+somatório, enquanto removê-lo redistribui sua fração molar entre as demais espécies, que
+repõem quase tudo. Regra de mistura não é soma de parcelas independentes.</p>
+
+<p>Mas são esses traços que tornam o gás corrosivo e tóxico, e o H<sub>2</sub>S é a
+espécie <em>menos</em> bem descrita pelo motor: sendo fortemente polar, usa o potencial de
+Stockmayer, e sua banda individual de condutividade é ±18,7% &mdash; a pior de toda a
+mistura (Seção <a href="#problemas">14.2</a>).</p>
+
+<p>Isso explica por que a linha <code>validated accuracy</code> reporta ±5,1% em <em>k</em>
+apesar de conter uma espécie de ±18,7%: a banda é a média ponderada pela
+composição, e o aporte do H<sub>2</sub>S é 4,5 × 10⁻⁵ × 18,7% =
+<strong>0,0008 ponto percentual</strong>. A banda está certa &mdash; nesta
+concentração o H<sub>2</sub>S realmente não compromete o <em>k</em> da mistura
+&mdash;, mas ela não diz nada sobre a acurácia do H<sub>2</sub>S <em>em si</em>.</p>
+
+<div class="callout note">
+  <span class="label">A banda acompanha a composição</span>
+  Num gás azedo, com H<sub>2</sub>S em percentual e não em ppm, a mesma
+  ponderação alarga a banda sozinha:
+  <div class="codeblock" style="margin-top:.7rem;">
+    <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --mixture CH4:0.52 CO2:0.42 O2:0.004 H2S:0.05 CO:0.000009 --T 300 --P 101325</code></pre>
+  </div>
+  <div class="output" style="margin:.7rem 0 0;">
+    <div class="outhead">saída (linhas selecionadas)</div>
+<pre>  Mixture transport — CH4=0.5231, CO2=0.4225, O2=0.0040, H2S=0.0503, CO=0.0000 @ T=300.0000 K, P=101325 Pa
+    Dynamic viscosity              =    1.33495e-05  Pa·s
+    Thermal conductivity           =      0.0223554  W/m/K
+    validated accuracy: viscosity ±3.9%, conductivity ±5.7%, diffusion ±6.6%</pre>
+  </div>
+  Com o H<sub>2</sub>S em 5%, <em>k</em> cai apenas 2,1%, mas a banda vai de ±5,1% para
+  ±5,7%. Leia sempre as duas linhas juntas: o valor sozinho não diz o quanto se pode
+  confiar nele.
+</div>
+
+<h5>Parte 2 &mdash; propriedades termodinâmicas da mesma composição</h5>
+
+<p><strong>Objetivo.</strong> O subcomando <code>run</code> aceita exatamente a mesma sintaxe de
+<code>--mixture</code> e devolve o quadro termodinâmico completo, em base molar e
+mássica, com a desagregação por componente. Na prática os dois comandos andam
+juntos: <code>run</code> dá <em>c<sub>p</sub></em>, <em>γ</em> e as funções de
+estado; <code>transport</code> dá μ, <em>k</em> e os adimensionais.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy run --mixture CH4:0.557 CO2:0.439 O2:0.004 H2S:0.000045 CO:0.000009 --T 300 --P 101325</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Mixture (mole): CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=0.0000, CO=0.0000
+  T=300.0000 K  P=101325 Pa  M_avg=28.3841 g/mol  R_specific=292.9269 J/kg/K
+  --- Molar (per mol) ---
+    U_m      =    7300.752727  J/mol
+    H_m      =    9795.091513  J/mol
+    S_m      =     204.441979  J/mol/K
+    A_m      =  -54031.841092  J/mol
+    G_m      =  -51537.502306  J/mol
+    Cv_m     =      27.992666  J/mol/K
+    Cp_m     =      36.307129  J/mol/K
+    gamma    =       1.297023  -
+    mu_m     =  -51537.502306  J/mol
+    S_mixing =       5.903407  J/mol/K
+  --- Massic (per kg) ---
+    U_s            =  257212.840753  J/kg
+    H_s            =  345090.897821  J/kg
+    S_s            =    7202.695976  J/kg/K
+    A_s            = -1903595.952010  J/kg
+    G_s            = -1815717.894942  J/kg
+    Cv_s           =     986.209710  J/kg/K
+    Cp_s           =    1279.136567  J/kg/K
+    R_specific     =     292.926857  J/kg/K
+  --- Per-component contribution to molar totals ---
+    species       x_i           U         S             G       Cp
+    CH4        0.5570     4230.73   106.547     -26344.05   19.888
+    CO2        0.4390     3044.65    96.875     -24922.98   16.300
+    O2         0.0040       24.98     1.004       -266.31    0.117
+    H2S        0.0000        0.34     0.013         -3.45    0.002
+    CO         0.0000        0.06     0.003         -0.72    0.000</pre>
+</div>
+
+<h5>Como ler o quadro termodinâmico</h5>
+
+<p><strong>A massa molar quase coincide com a do ar.</strong> <em>M</em> = 28,3841 g/mol contra
+28,9660 do ar, apenas 2,0% menor &mdash; coincidência numérica entre um CH<sub>4</sub>
+muito leve (16,04) e um CO<sub>2</sub> muito pesado (44,01). É por isso que a densidade do
+biogás (1,15302 kg/m³) fica tão perto da do ar (1,17666) e a intuição de
+&ldquo;gás leve&rdquo; falha aqui.</p>
+
+<p><strong>As capacidades caloríficas denunciam os modos internos.</strong>
+<em>C<sub>p,m</sub></em>/<em>R</em> = 4,3667. Se todas as moléculas fossem rotores rígidos
+— 4<em>R</em> para as não lineares (CH<sub>4</sub>, H<sub>2</sub>S) e 7<em>R</em>/2 para as
+lineares (CO<sub>2</sub>, O<sub>2</sub>, CO) — a média ponderada daria apenas 3,7785. O excesso
+de <strong>0,5882 <em>R</em></strong> é inteiramente vibracional, e reparte-se assim:</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Origem do excesso vibracional em <em>C<sub>p,m</sub></em>, a 300 K.</caption>
+    <thead>
+      <tr><th>Espécie</th><th><em>C<sub>p,i</sub></em>/<em>R</em></th><th>Limite rígido</th><th>Excesso vib.</th><th>Aporte (× <em>x<sub>i</sub></em>)</th><th>Quota do excesso</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>CO<sub>2</sub></td><td>4,4659</td><td>3,50</td><td>0,9659</td><td>0,4240</td><td><strong>72%</strong></td></tr>
+      <tr><td>CH<sub>4</sub></td><td>4,2947</td><td>4,00</td><td>0,2947</td><td>0,1641</td><td><strong>28%</strong></td></tr>
+      <tr><td>H<sub>2</sub>S</td><td>4,1125</td><td>4,00</td><td>0,1125</td><td>0,0000</td><td>—</td></tr>
+      <tr><td>O<sub>2</sub></td><td>3,5294</td><td>3,50</td><td>0,0294</td><td>0,0001</td><td>—</td></tr>
+      <tr><td>CO</td><td>3,5033</td><td>3,50</td><td>0,0033</td><td>0,0000</td><td>—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Quase três quartos vêm do CO<sub>2</sub>, e por um motivo específico: seu modo de flexão
+duplamente degenerado está em 667 cm⁻¹, ou seja, uma temperatura característica de 960 K —
+baixa o bastante para estar apreciavelmente povoado a 300 K. Os modos do CH<sub>4</sub>
+começam só em 1306 cm⁻¹ (1879 K) e por isso rendem bem menos, apesar de o metano ser a
+espécie majoritária. Daí <em>γ</em> = 1,2970 em vez de 1,4. Nada disso é parâmetro ajustado:
+sai da função de partição vibracional (Seção <a href="#termodinamica">7.5</a>). E como
+conferência de gás ideal, <em>C<sub>p,m</sub></em> − <em>C<sub>v,m</sub></em> =
+36,307129 − 27,992666 = 8,314463 = <em>R</em>, exato.</p>
+
+<div class="callout warn">
+  <span class="label"><code>S_mixing</code> é informativo &mdash; não some de novo</span>
+  <code>S_mixing</code> = 5,903407 J/mol·K é a entropia de mistura,
+  −<em>R</em> Σ <em>x<sub>i</sub></em> ln <em>x<sub>i</sub></em>,
+  impressa à parte porque é a contribuição puramente combinatória &mdash;
+  ela existiria mesmo se todos os componentes fossem termodinamicamente idênticos. Mas
+  <strong>ela já está embutida</strong> em <code>S_m</code> e nas contribuições
+  por componente, que valem
+  <em>x<sub>i</sub></em> (<em>S<sub>i</sub></em> − <em>R</em> ln <em>x<sub>i</sub></em>):
+  106,547 + 96,875 + 1,004 + 0,013 + 0,003 = <strong>204,442</strong> = <code>S_m</code>.
+  Somá-la outra vez conta a mistura em dobro.
+</div>
+
+<p><strong>A desagregação por componente não segue as frações molares.</strong>
+O CH<sub>4</sub>, com 55,7% das moléculas, responde por 57,9% de <em>U</em>, 54,8% de
+<em>C<sub>p</sub></em> e 52,1% de <em>S</em>. As colunas <em>U</em> e <em>C<sub>p</sub></em>
+somam os totais molares exatamente (4230,73 + 3044,65 + 24,98 + 0,34 + 0,06 = 7300,76 J/mol;
+19,888 + 16,300 + 0,117 + 0,002 + 0,000 = 36,307 J/mol·K), o que dá uma leitura direta de
+quem carrega a energia e quem carrega o calor específico.</p>
+
+<h5>Os dois comandos são o mesmo motor</h5>
+
+<p>O melhor teste de que <code>run</code> e <code>transport</code> não são duas
+implementações paralelas é fechar os números de um com os do outro. Tomando
+<em>c<sub>p,s</sub></em> = 1279,136567 J/kg·K e <em>R</em><sub>esp</sub> = 292,926857
+J/kg·K do <code>run</code>, e μ = 1,33454 × 10⁻⁵ Pa·s e <em>k</em> =
+0,0228345 W/m·K do <code>transport</code>:</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Identidades que ligam as duas saídas, a 300 K e 101325 Pa.</caption>
+    <thead>
+      <tr><th>Relação</th><th>Calculado dos dois quadros</th><th>Impresso por <code>transport</code></th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ρ = <em>P</em>/(<em>R</em><sub>esp</sub><em>T</em>)</td><td>1,153018 kg/m³</td><td>1,15302</td></tr>
+      <tr><td>ν = μ/ρ</td><td>1,157432 × 10⁻⁵ m²/s</td><td>1,15743 × 10⁻⁵</td></tr>
+      <tr><td>α = <em>k</em>/(ρ <em>c<sub>p,s</sub></em>)</td><td>1,548241 × 10⁻⁵ m²/s</td><td>1,54824 × 10⁻⁵</td></tr>
+      <tr><td>Pr = μ <em>c<sub>p,s</sub></em>/<em>k</em></td><td>0,747579</td><td>0,74758</td></tr>
+      <tr><td><em>a</em> = √(<em>γ R</em><sub>esp</sub><em>T</em>)</td><td>337,609 m/s</td><td>337,609</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Todas fecham na precisão impressa. Em particular, o Prandtl é calculado como
+μ <em>c<sub>p</sub></em>/<em>k</em> com o <em>c<sub>p</sub></em> que vem da
+função de partição &mdash; não de uma forma fechada de Eucken, que só
+coincidiria com esse valor se <em>k</em> também viesse de Eucken.</p>
+
+<h5>Comparação com o ar, no mesmo estado</h5>
+
+<div class="table-wrap">
+  <table>
+    <caption>Biogás <em>versus</em> ar seco (<code>statthermopy transport --fluid Air --T 300 --P 101325</code>), ambos a 300 K e 1 atm.</caption>
+    <thead>
+      <tr><th>Propriedade</th><th>Biogás</th><th>Ar seco</th><th>Diferença</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><em>ρ</em> (kg/m³)</td><td>1,15302</td><td>1,17666</td><td>−2,0%</td></tr>
+      <tr><td><em>R</em><sub>esp</sub> (J/kg·K)</td><td>292,927</td><td>287,042</td><td>+2,1%</td></tr>
+      <tr><td>μ (Pa·s)</td><td>1,33454 × 10⁻⁵</td><td>1,83511 × 10⁻⁵</td><td><strong>−27,3%</strong></td></tr>
+      <tr><td><em>k</em> (W/m·K)</td><td>0,0228345</td><td>0,0258419</td><td><strong>−11,6%</strong></td></tr>
+      <tr><td>Pr</td><td>0,74758</td><td>0,713108</td><td>+4,8%</td></tr>
+      <tr><td><em>γ</em></td><td>1,29702</td><td>1,40025</td><td>−7,4%</td></tr>
+      <tr><td><em>a</em> (m/s)</td><td>337,609</td><td>347,245</td><td>−2,8%</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>A leitura prática: densidade e velocidade do som praticamente iguais às do ar, mas
+μ 27% menor e <em>k</em> 12% menor. Um medidor térmico de vazão — fio quente ou mássico —
+calibrado em ar e aplicado a biogás erra justamente por isso: o que ele mede depende de
+<em>k</em> e μ, não da densidade, que aqui quase não mudou. É um engano fácil de cometer
+porque a massa molar &ldquo;bate&rdquo;.</p>
+
+<h5>Variações úteis deste mesmo caso</h5>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code># composição em base mássica (como sai de alguns laudos)
+statthermopy transport --mixture CH4:0.557 CO2:0.439 O2:0.004 H2S:0.000045 CO:0.000009 --basis mass --T 300 --P 101325
+
+# Sc e Le da água difundindo neste biogás (traçador que não pertence à mistura)
+statthermopy transport --mixture CH4:0.557 CO2:0.439 O2:0.004 H2S:0.000045 CO:0.000009 --trace H2O --T 300
+
+# viscosidade do pré-aquecimento até a queima
+statthermopy transport --mixture CH4:0.557 CO2:0.439 O2:0.004 H2S:0.000045 CO:0.000009 --prop mu --Tmin 300 --Tmax 1200 --N 100 --png biogas_mu.png
+
+# exportar o quadro termodinâmico
+statthermopy run --mixture CH4:0.557 CO2:0.439 O2:0.004 H2S:0.000045 CO:0.000009 --T 300 --P 101325 --export csv biogas.csv</code></pre>
+</div>
+
+<p>A base mássica muda bastante o quadro, porque o CH<sub>4</sub> é leve: as mesmas
+frações lidas como massa dão CH<sub>4</sub>=0,7746 e CO<sub>2</sub>=0,2225 em base
+molar. Confira sempre a linha <code>composition (mole)</code> para saber em que base o
+cálculo foi feito.</p>
 
 <h3>8.5 Transporte do ar seco e do ar úmido</h3>
 
