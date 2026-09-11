@@ -462,3 +462,69 @@ def test_cli_quit():
     from statthermopy.cli.app import StatThermoPyShell
     sh = StatThermoPyShell()
     assert sh.onecmd("quit") is True
+
+# -- mole-fraction display ----------------------------------------------------
+
+class TestMoleFractionsAreNeverShownAsZero:
+    """A component that is in the calculation must never be displayed as zero.
+
+    Plot titles formatted the composition with two decimals, so a five-component biogas came
+    out as ``CH4 0.56, CO2 0.44, O2 0.00, H2S 0.00, CO 0.00`` -- three components apparently
+    absent, printed on top of a curve that was computed with all five.
+    """
+
+    BIOGAS = {"CH4": 0.557, "CO2": 0.439, "O2": 0.004, "H2S": 0.000045, "CO": 0.000009}
+
+    @pytest.mark.parametrize(
+        "x,decimals,expected",
+        [
+            (0.7808, 4, "0.7808"),       # ordinary fractions keep fixed point
+            (0.0093, 4, "0.0093"),
+            (0.0004, 4, "0.0004"),       # dry air's CO2: legible, so left alone
+            (0.0040, 2, "4.00e-03"),     # two decimals would erase it
+            (0.0040, 4, "0.0040"),       # four would not
+            (4.5e-05, 4, "4.50e-05"),
+            (9.0e-06, 4, "9.00e-06"),
+            (0.0, 4, "0.0000"),          # a real zero may print as zero
+        ],
+    )
+    def test_the_switch_happens_exactly_at_the_erasure_boundary(self, x, decimals, expected):
+        from statthermopy.mixture import format_mole_fraction
+
+        assert format_mole_fraction(x, decimals=decimals) == expected
+
+    def _title(self, fn):
+        import numpy as np
+
+        from statthermopy.mixture import IdealGasMixture
+
+        mix = IdealGasMixture.from_names(self.BIOGAS)
+        return fn(mix, np.linspace(300.0, 1000.0, 10)).get_title()
+
+    def test_property_plot_title_shows_every_component(self):
+        from statthermopy.plots import plot_mixture_property
+
+        title = self._title(lambda m, T: plot_mixture_property(m, "Cp_m", T))
+        assert "O2 0.0040" in title
+        assert "H2S 4.50e-05" in title and "CO 9.00e-06" in title
+        assert " 0.00," not in title and not title.endswith(" 0.00")
+
+    def test_thermal_fields_plot_title_shows_every_component(self):
+        from statthermopy.plots import plot_mixture_thermal_fields
+
+        title = self._title(plot_mixture_thermal_fields)
+        assert "O2 0.0040" in title
+        assert " 0.00," not in title
+
+    def test_air_title_is_unchanged_where_it_was_already_legible(self):
+        import numpy as np
+
+        from statthermopy.mixture import IdealGasMixture
+        from statthermopy.plots import plot_mixture_property
+
+        mix = IdealGasMixture.from_names(
+            {"N2": 0.7808, "O2": 0.2095, "Ar": 0.0093, "CO2": 0.0004}
+        )
+        title = plot_mixture_property(mix, "Cp_m", np.linspace(300.0, 1000.0, 10)).get_title()
+        assert "Ar 0.0093" in title and "CO2 0.0004" in title
+        assert "e-0" not in title  # nothing needed scientific notation here

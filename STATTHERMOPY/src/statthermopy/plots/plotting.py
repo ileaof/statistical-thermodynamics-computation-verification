@@ -17,6 +17,7 @@ from typing import Iterable
 
 from ..core.state import State
 from ..database import get
+from ..mixture import format_mole_fraction
 from ..thermodynamics import Thermodynamics
 
 # Matplotlib is imported lazily so the package core (and the CLI) does not require it.
@@ -185,7 +186,7 @@ def plot_mixture_property(
     plt = _get_pyplot()
     if ax is None:
         _, ax = plt.subplots(figsize=(7, 4.5))
-    comp = ", ".join(f"{mol.name} {xi:.2f}" for mol, xi in mixture.x.items())
+    comp = ", ".join(f"{mol.name} {format_mole_fraction(xi)}" for mol, xi in mixture.x.items())
     ax.plot(Ts, vals, label=label or f"mixture: {prop}", color=color)
     ax.set_xlabel("Temperature (K)")
     ax.set_ylabel(_ylabel(prop))
@@ -225,7 +226,7 @@ def plot_mixture_thermal_fields(mixture, T_range: Iterable[float], P: float = 10
     for prop in THERMAL_FIELDS:
         plot_mixture_property(mixture, prop, T_range, P=P, ax=ax,
                               label=_THERMAL_FIELD_LABELS[prop], color=_THERMAL_FIELD_COLORS[prop])
-    comp = ", ".join(f"{mol.name} {xi:.2f}" for mol, xi in mixture.x.items())
+    comp = ", ".join(f"{mol.name} {format_mole_fraction(xi)}" for mol, xi in mixture.x.items())
     ax.set_ylabel("Thermal field [K]")
     ax.set_title(f"{comp} — thermal fields vs T @ {P/1e3:.1f} kPa")
     ax.legend()

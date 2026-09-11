@@ -59,6 +59,57 @@ def test_gui_main_is_callable():
     assert callable(gui_main)
 
 
+class TestFitsOnScreen:
+    """The window must be resizable down to whatever display the user actually has.
+
+    Every tab used to sit directly in the tab widget, so the widest tab's layout minimum
+    became the window's minimum: 2509x663, which no laptop panel can show. The window then
+    refused to shrink and the right-hand pane stayed off-screen, unreachable. Tabs now live
+    in scroll areas, whose own minimum is small.
+    """
+
+    def test_every_tab_is_scrollable(self, win):
+        from PySide6.QtWidgets import QScrollArea
+
+        for i in range(win._tabs.count()):
+            area = win._tabs.widget(i)
+            assert isinstance(area, QScrollArea), win._tabs.tabText(i)
+            # Without this the tab would not stretch to fill a large window.
+            assert area.widgetResizable(), win._tabs.tabText(i)
+            assert area.widget() is not None, win._tabs.tabText(i)
+
+    def test_window_minimum_is_small_enough_for_a_laptop(self, win):
+        """The binding constraint was horizontal: one tab wanted 2509 px of width."""
+        minimum = win.minimumSizeHint()
+        assert minimum.width() <= 1024
+        assert minimum.height() <= 720
+
+    def test_window_can_actually_be_resized_small(self, win):
+        win.resize(800, 600)
+        assert win.width() <= 800 and win.height() <= 600
+
+    def test_scrollbars_appear_only_when_the_content_does_not_fit(self, win, qapp):
+        """A tab wider than the viewport must scroll; one that fits must not show a bar."""
+        win.show()
+        win.resize(1000, 700)
+        qapp.processEvents()
+        bars = {}
+        for i in range(win._tabs.count()):
+            win._tabs.setCurrentIndex(i)
+            qapp.processEvents()
+            area = win._tabs.widget(i)
+            needed = area.widget().minimumSizeHint().width() > area.viewport().width()
+            bars[win._tabs.tabText(i)] = (needed, area.horizontalScrollBar().isVisible())
+        for tab, (needed, shown) in bars.items():
+            assert needed == shown, f"{tab}: needs scrollbar={needed}, shown={shown}"
+        win.hide()
+
+    def test_opening_size_never_exceeds_the_screen(self, win, qapp):
+        available = qapp.primaryScreen().availableGeometry()
+        assert win.width() <= available.width()
+        assert win.height() <= available.height()
+
+
 def test_window_constructs_with_tabs(win):
     assert win._tabs.count() == 7
     assert win._tabs.tabText(0) == "Properties"
@@ -361,18 +412,155 @@ def test_validate_tab_runs_and_passes(win):
     assert len(win.val_canvas.figure.axes) == 1
 
 
-def test_make_state_includes_optional_vars(win):
-    win.T_spin.setValue(500.0)
-    win.P_spin.setValue(1e5)
-    win.V_chk.setChecked(True)
-    win.V_spin.setValue(0.05)
-    st = win._make_state()
-    assert pytest.approx(500.0) == st.T
-    assert pytest.approx(1e5) == st.P
-    assert pytest.approx(0.05) == st.V
-    win.V_chk.setChecked(False)  # restore
-    st2 = win._make_state()
-    assert st2.V is None
+class TestStateIsNeverOverDetermined:
+    """P/V and n/m are alternatives; supplying both members of a pair over-determines it.
+
+    The old checkboxes let a user tick V while P stayed active, and ``State.resolve`` accepts
+    that pair without checking it against the ideal-gas law: with P=101325 Pa, T=298.15 K,
+    n=1 mol and V=0.024 m^3 it returned PV/nRT = 0.981 and an entropy 0.16 J/mol/K off. Ticking
+    both n and m raised "Inconsistent m and n" instead. Radio buttons remove both cases.
+    """
+
+    def test_pressure_and_volume_are_never_both_sent(self, win):
+        win.T_spin.setValue(500.0)
+        win.P_spin.setValue(1e5)
+        win.use_P.setChecked(True)
+        st = win._make_state()
+        assert st.T == pytest.approx(500.0)
+        assert st.P == pytest.approx(1e5)
+        assert st.V is None
+
+        win.use_V.setChecked(True)
+        win.V_spin.setValue(0.05)
+        st = win._make_state()
+        assert st.V == pytest.approx(0.05)
+        assert st.P is None
+        win.use_P.setChecked(True)  # restore
+
+    def test_moles_and_mass_are_never_both_sent(self, win):
+        win.use_n.setChecked(True)
+        win.n_spin.setValue(2.0)
+        st = win._make_state()
+        assert st.n == pytest.approx(2.0)
+        assert st.m is None
+
+        win.use_m.setChecked(True)
+        win.m_spin.setValue(0.05)
+        st = win._make_state()
+        assert st.m == pytest.approx(0.05)
+        assert st.n is None
+        win.use_n.setChecked(True)  # restore
+
+    @pytest.mark.parametrize("use_volume", [False, True])
+    @pytest.mark.parametrize("use_mass", [False, True])
+    def test_every_combination_resolves_to_an_ideal_gas(self, win, use_volume, use_mass):
+        """PV = nRT must hold exactly, whichever pair of inputs the user picks."""
+        from statthermopy.constants import R
+        from statthermopy.database import get
+
+        win.T_spin.setValue(298.15)
+        win.P_spin.setValue(101325.0)
+        win.V_spin.setValue(0.05)
+        win.n_spin.setValue(2.0)
+        win.m_spin.setValue(0.05)
+        (win.use_V if use_volume else win.use_P).setChecked(True)
+        (win.use_m if use_mass else win.use_n).setChecked(True)
+
+        resolved = win._make_state().resolve(get("N2").molar_mass)
+        assert resolved.P * resolved.V / (resolved.n * R * resolved.T) == pytest.approx(1.0)
+        win.use_P.setChecked(True)
+        win.use_n.setChecked(True)
+
+    def test_the_derived_field_is_greyed_out(self, win):
+        win.use_P.setChecked(True)
+        assert win.P_spin.isEnabled() and not win.V_spin.isEnabled()
+        win.use_V.setChecked(True)
+        assert win.V_spin.isEnabled() and not win.P_spin.isEnabled()
+        win.use_P.setChecked(True)
+
+
+class TestPpmComponentsSurviveTheGui:
+    """A ppm component must reach the mixture, and must appear on the plot that results."""
+
+    def test_the_fraction_spinbox_can_hold_a_ppm_value(self, win):
+        """At four decimals it rounded 4.5e-05 to zero on entry, silently dropping H2S."""
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        spin = win.mix_table.cellWidget(0, 1)
+        spin.setValue(0.000045)
+        assert spin.value() == pytest.approx(4.5e-05)
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+
+    def test_a_small_component_is_named_on_the_plot_title(self, win):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        while win.mix_table.rowCount() < 3:
+            win._add_mixture_row()
+        for row, (name, x) in enumerate([("CH4", 0.557), ("CO2", 0.439), ("O2", 0.004)]):
+            win.mix_table.cellWidget(row, 0).setCurrentText(name)
+            win.mix_table.cellWidget(row, 1).setValue(x)
+        win.plot_prop.setCurrentText("Cp_m")
+        win.plot_tmin.setValue(300.0)
+        win.plot_tmax.setValue(1000.0)
+        win._on_plot()
+        title = win.plot_canvas.ax.get_title()
+        assert "O2 0.0040" in title, title      # used to read "O2 0.00"
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+
+
+class TestThreeReportingBases:
+    """Results are indexed on three bases: per mol, per kg and per m^3."""
+
+    @staticmethod
+    def _rows(win):
+        table = win.results_table
+        out = {}
+        for r in range(table.rowCount()):
+            label = table.item(r, 0).text().split()[0]
+            out[label] = [table.item(r, c).text() for c in range(1, 4)]
+        return out
+
+    def test_the_table_carries_all_three_columns(self, win):
+        headers = [win.results_table.horizontalHeaderItem(c).text()
+                   for c in range(win.results_table.columnCount())]
+        assert headers == ["Property", "Molar", "Massic", "Volumetric"]
+
+    def test_the_three_bases_reconcile(self, win):
+        """volumetric = massic x rho, and molar = volumetric x V_m."""
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+        win.gas_combo.setCurrentText("N2")
+        win.T_spin.setValue(298.15)
+        win.P_spin.setValue(101325.0)
+        win._on_compute()
+        rows = self._rows(win)
+        V_m = float(rows["V_m"][0])
+        rho = float(rows["rho"][2])
+        for key in ("U_m", "H_m", "S_m", "Cv_m", "Cp_m"):
+            molar, massic, volumetric = (float(v) for v in rows[key])
+            assert volumetric == pytest.approx(molar / V_m, rel=1e-5), key
+            assert volumetric == pytest.approx(massic * rho, rel=1e-4), key
+
+    def test_ratios_have_no_per_volume_form(self, win):
+        """gamma and the thermal fields are not extensive, so those cells stay blank."""
+        win.gas_combo.setCurrentText("N2")
+        win._on_compute()
+        rows = self._rows(win)
+        for key in ("gamma", "T_v", "T_p"):
+            assert rows[key][1] == "—" and rows[key][2] == "—", key
+
+    def test_a_mixture_also_gets_the_volumetric_column(self, win):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        win.T_spin.setValue(300.0)
+        win.P_spin.setValue(101325.0)
+        win._on_compute()
+        rows = self._rows(win)
+        assert rows["S_m"][2] not in ("", "—")
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
 
 
 def test_export_writes_file(win, tmp_path):
@@ -412,14 +600,13 @@ def test_mixture_delete_row_and_n_m_state(win):
     assert win.mix_table.rowCount() >= 2
     win.mix_table.selectRow(0)
     win._del_mixture_row()
-    # exercise n and m checkboxes in _make_state
-    win.n_chk.setChecked(True)
-    win.n_spin.setValue(2.0)
-    win.m_chk.setChecked(True)
+    # the amount reaches _make_state as whichever of n/m is selected, never both
+    win.use_m.setChecked(True)
     win.m_spin.setValue(0.05)
     st = win._make_state()
-    assert st.n == pytest.approx(2.0)
     assert st.m == pytest.approx(0.05)
+    assert st.n is None
+    win.use_n.setChecked(True)
 
 
 def test_theme_applied_on_construct(win):

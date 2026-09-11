@@ -28,7 +28,31 @@ from .core.molecule import Molecule
 from .core.state import State
 from .thermodynamics import Thermodynamics
 
-__all__ = ["IdealGasMixture", "MixtureProperties", "ComponentContribution"]
+__all__ = [
+    "IdealGasMixture",
+    "MixtureProperties",
+    "ComponentContribution",
+    "format_mole_fraction",
+]
+
+
+def format_mole_fraction(x: float, decimals: int = 4, width: int = 0) -> str:
+    """Format a mole fraction so a component that is present never prints as zero.
+
+    Fixed-point reads best for ordinary compositions, but it silently erases anything below
+    half of its last place: two decimals turn 0.004 into ``0.00``, four turn 4.5e-05 into
+    ``0.0000``. A composition echoed back as zero reads as "the program discarded what I
+    entered", which is exactly the wrong message when the component is in the calculation.
+
+    So fall back to scientific notation precisely when the fixed form would erase a component
+    that is really there, and not a moment sooner -- compositions that were already legible
+    are left untouched (dry air keeps ``CO2 0.0004``). An exact zero still prints as zero,
+    because there that is the truth.
+    """
+    text = f"{x:.{decimals}f}"
+    if x != 0.0 and float(text) == 0.0:
+        text = f"{x:.2e}"
+    return f"{text:>{width}}" if width else text
 
 
 @dataclass

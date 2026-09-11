@@ -27,7 +27,7 @@ from ..database import get, list_molecules
 from ..fluids import available_fluids, get_fluid
 from ..humidair import HumidAir
 from ..io import Exporter
-from ..mixture import IdealGasMixture
+from ..mixture import IdealGasMixture, format_mole_fraction
 from ..plots import MOLAR_PROPS, PARTITION_PROPS, plot_property
 from ..thermodynamics import Thermodynamics
 from ..transport import TRANSPORT_PROPS, TRANSPORT_UNITS, TransportCalculator
@@ -76,19 +76,8 @@ _UNITS = {
 _AIR_TRANSPORT_PROPS = ("mu", "nu", "k", "alpha", "D_eff", "Pr", "Sc", "Le")
 
 def _fmt_x(x: float, width: int = 0) -> str:
-    """Format a mole fraction so that a species present in the mixture never prints as zero.
-
-    Four decimals read best for ordinary compositions, but they turn any trace below 5e-05
-    into ``0.0000`` -- and a user who typed ``H2S:0.000045`` reads that as the input having
-    been dropped, not as rounding. So fall back to scientific notation exactly when the fixed
-    form would erase a species that is really there, and not a moment sooner: this leaves every
-    legible composition alone (dry air keeps ``CO2=0.0004``) and costs eight columns when it
-    does trigger. An exact zero still prints ``0.0000``, because there it is the truth.
-    """
-    s = f"{x:.4f}"
-    if x != 0.0 and float(s) == 0.0:
-        s = f"{x:.2e}"
-    return f"{s:>{width}}" if width else s
+    """Format a mole fraction for the CLI tables; see :func:`format_mole_fraction`."""
+    return format_mole_fraction(x, width=width)
 
 
 def _parse_air_humidity(tokens: list[str]) -> tuple[dict, list[str]]:

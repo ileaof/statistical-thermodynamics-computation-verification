@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSpinBox,
     QSplitter,
     QStyle,
@@ -47,6 +48,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..constants import R
 from ..core.state import State
 from ..database import get, list_molecules
 from ..fluids import available_fluids, get_fluid
@@ -148,7 +150,7 @@ class StatThermoPyWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("StatThermoPy — Statistical Thermodynamics")
-        self.resize(1100, 760)
+        self._fit_to_screen(1100, 760)
 
         self._last_result = None  # last ThermoProperties / MixtureProperties (for export)
         self._theme_mode = "light"
@@ -157,13 +159,13 @@ class StatThermoPyWindow(QMainWindow):
         self._theme_actions: dict[str, QAction] = {}
 
         tabs = QTabWidget(self)
-        tabs.addTab(self._build_properties_tab(), "Properties")
-        tabs.addTab(self._build_plot_tab(), "Plot")
-        tabs.addTab(self._build_transport_tab(), "Transport")
-        tabs.addTab(self._build_humidair_tab(), "Humid Air")
-        tabs.addTab(self._build_comparisons_tab(), "Thermodynamic Comparisons")
-        tabs.addTab(self._build_air_transport_tab(), "Air Transport")
-        tabs.addTab(self._build_validate_tab(), "Validate")
+        tabs.addTab(self._scrollable(self._build_properties_tab()), "Properties")
+        tabs.addTab(self._scrollable(self._build_plot_tab()), "Plot")
+        tabs.addTab(self._scrollable(self._build_transport_tab()), "Transport")
+        tabs.addTab(self._scrollable(self._build_humidair_tab()), "Humid Air")
+        tabs.addTab(self._scrollable(self._build_comparisons_tab()), "Thermodynamic Comparisons")
+        tabs.addTab(self._scrollable(self._build_air_transport_tab()), "Air Transport")
+        tabs.addTab(self._scrollable(self._build_validate_tab()), "Validate")
         self.setCentralWidget(tabs)
         self._tabs = tabs
 
@@ -270,22 +272,40 @@ class StatThermoPyWindow(QMainWindow):
         self.V_spin = self._make_spin(0.0, 1.0e6, 0.024)
         self.n_spin = self._make_spin(0.0, 1.0e6, 1.0)
         self.m_spin = self._make_spin(0.0, 1.0e6, 0.028)
-        self.V_chk = QCheckBox("V")
-        self.n_chk = QCheckBox("n")
-        self.m_chk = QCheckBox("m")
-        for label, spin, chk in [
+        # P and V are alternatives, and so are n and m: the state is over-determined if both
+        # of a pair are supplied. Radio buttons make that exclusivity structural instead of
+        # leaving the user to discover it from an error -- or, worse, from a silently
+        # inconsistent answer (State.resolve does not check P against V).
+        self.use_P = QRadioButton()
+        self.use_V = QRadioButton()
+        self.use_P.setChecked(True)
+        self.pv_group = QButtonGroup(self)
+        self.pv_group.addButton(self.use_P, 0)
+        self.pv_group.addButton(self.use_V, 1)
+        self.use_P.toggled.connect(self._on_state_basis_changed)
+
+        self.use_n = QRadioButton()
+        self.use_m = QRadioButton()
+        self.use_n.setChecked(True)
+        self.nm_group = QButtonGroup(self)
+        self.nm_group.addButton(self.use_n, 0)
+        self.nm_group.addButton(self.use_m, 1)
+        self.use_n.toggled.connect(self._on_state_basis_changed)
+
+        for label, spin, radio in [
             ("T (K)", self.T_spin, None),
-            ("P (Pa)", self.P_spin, None),
-            ("V (m^3)", self.V_spin, self.V_chk),
-            ("n (mol)", self.n_spin, self.n_chk),
-            ("m (kg)", self.m_spin, self.m_chk),
+            ("P (Pa)", self.P_spin, self.use_P),
+            ("V (m^3)", self.V_spin, self.use_V),
+            ("n (mol)", self.n_spin, self.use_n),
+            ("m (kg)", self.m_spin, self.use_m),
         ]:
             row = QHBoxLayout()
+            if radio is not None:
+                row.addWidget(radio)
             row.addWidget(spin)
-            if chk is not None:
-                row.addWidget(chk)
             row.addStretch()
             form.addRow(label, row)
+        self._on_state_basis_changed()
         llay.addWidget(state_box)
 
         self.compute_btn = QPushButton("Compute")
@@ -304,12 +324,13 @@ class StatThermoPyWindow(QMainWindow):
         res_box = QGroupBox("Results")
         res_lay = QVBoxLayout(res_box)
         res_lay.setContentsMargins(8, 8, 8, 8)
-        self.results_table = QTableWidget(0, 3, self)
+        self.results_table = QTableWidget(0, 4, self)
         self.results_table.setAlternatingRowColors(True)
-        self.results_table.setHorizontalHeaderLabels(["Property", "Molar", "Massic"])
-        self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.results_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.results_table.setHorizontalHeaderLabels(
+            ["Property", "Molar", "Massic", "Volumetric"]
+        )
+        for col in range(4):
+            self.results_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)
         res_lay.addWidget(self.results_table)
         rlay.addWidget(res_box, 1)
 
@@ -1412,6 +1433,39 @@ class StatThermoPyWindow(QMainWindow):
         self._apply_theme(effective)
 
     # ------------------------------------------------------------------ helpers
+    def _fit_to_screen(self, width: int, height: int) -> None:
+        """Open at the preferred size, or at the largest size the display can actually show.
+
+        ``resize`` on its own is a request the window manager will honour even when the
+        result is taller than the screen, which puts the bottom of the window (and the
+        buttons there) out of reach on a laptop panel or at a high display scaling factor.
+        """
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            width = min(width, available.width())
+            height = min(height, available.height())
+        self.resize(width, height)
+
+    @staticmethod
+    def _scrollable(inner: QWidget) -> QScrollArea:
+        """Wrap a tab so the window can be made smaller than the tab's natural size.
+
+        A layout's minimum size propagates upward and becomes the window's minimum, so on a
+        display shorter than the tallest tab needs, the window simply refuses to shrink: the
+        bottom of the form -- where the compute and export buttons live -- sits off-screen
+        with no way to reach it. Inside a scroll area the floor becomes the scroll area's own
+        small minimum, and whatever no longer fits is reached by scrolling instead.
+
+        ``setWidgetResizable`` keeps the tab stretching to fill the viewport whenever there
+        *is* room, so on a large display nothing changes and no scrollbars appear.
+        """
+        area = QScrollArea()
+        area.setWidget(inner)
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)   # the tab pane already draws the border
+        return area
+
     @staticmethod
     def _make_spin(minv: float, maxv: float, val: float) -> QDoubleSpinBox:
         sb = QDoubleSpinBox()
@@ -1466,7 +1520,10 @@ class StatThermoPyWindow(QMainWindow):
         # table shows the running sum (green when it is exactly 1), and the
         # mixture is normalised at compute time.
         frac.setRange(0.0, 1.0)
-        frac.setDecimals(4)
+        # Six decimals, not four: real analyses carry ppm-level components (a biogas H2S at
+        # 4.5e-05, say), and at four decimals the spinbox cannot even hold such a value -- it
+        # is rounded to zero on entry, so the component silently never reaches the mixture.
+        frac.setDecimals(6)
         frac.setSingleStep(0.01)
         frac.setValue(1.0 if r == 0 else 0.0)
         frac.valueChanged.connect(self._update_fraction_sum)
@@ -1550,13 +1607,25 @@ class StatThermoPyWindow(QMainWindow):
             self.mix_table.cellWidget(r, 1).setValue(float(frac))
         self._update_fraction_sum()
 
+    def _on_state_basis_changed(self) -> None:
+        """Grey out the field that is being derived rather than supplied."""
+        self.P_spin.setEnabled(self.use_P.isChecked())
+        self.V_spin.setEnabled(self.use_V.isChecked())
+        self.n_spin.setEnabled(self.use_n.isChecked())
+        self.m_spin.setEnabled(self.use_m.isChecked())
+
     def _make_state(self) -> State | None:
-        kwargs: dict = {"T": float(self.T_spin.value()), "P": float(self.P_spin.value())}
-        if self.V_chk.isChecked():
+        # Exactly one of P/V and one of n/m, never both: supplying both members of a pair
+        # over-determines the state. P-with-V is the dangerous one, because State.resolve
+        # accepts the pair without checking it against the ideal-gas law.
+        kwargs: dict = {"T": float(self.T_spin.value())}
+        if self.use_P.isChecked():
+            kwargs["P"] = float(self.P_spin.value())
+        else:
             kwargs["V"] = float(self.V_spin.value())
-        if self.n_chk.isChecked():
+        if self.use_n.isChecked():
             kwargs["n"] = float(self.n_spin.value())
-        if self.m_chk.isChecked():
+        else:
             kwargs["m"] = float(self.m_spin.value())
         return State(**kwargs)
 
@@ -1592,25 +1661,35 @@ class StatThermoPyWindow(QMainWindow):
             QMessageBox.critical(self, "StatThermoPy", f"Computation failed:\n{exc}")
 
     def _populate_results(self, res) -> None:
-        rows = []  # (label, molar value or None, massic value or None)
+        # Every row is the same quantity on three bases: per mol, per kg and per m^3. The
+        # volumetric column is the molar one divided by the molar volume of the state.
+        V_m = _molar_volume(res)
+        rows = []  # (label, molar, massic, volumetric) -- None means "no such value"
         for key in _MOLAR_ROWS:
             mv = getattr(res, key, None)
             sv = _massic_for(key)
             massic = getattr(res, sv, None) if sv else None
             unit = _UNITS.get(key, "")
-            rows.append((f"{key}  [{unit}]" if unit else key, mv, massic))
+            rows.append((f"{key}  [{unit}]" if unit else key, mv, massic,
+                         _volumetric(mv, key, V_m)))
         # mixture-only summary: average molar mass, specific gas constant, entropy of mixing
         if hasattr(res, "S_mixing"):
-            rows.append(("M_avg  [g/mol]", res.M_avg * 1e3, None))
-            rows.append(("R_specific  [J/kg/K]", None, res.R_specific))
-            rows.append(("S_mixing  [J/mol/K]", res.S_mixing, None))
+            rows.append(("M_avg  [g/mol]", res.M_avg * 1e3, None, None))
+            rows.append(("R_specific  [J/kg/K]", None, res.R_specific, None))
+            rows.append(("S_mixing  [J/mol/K]", res.S_mixing, None,
+                         _volumetric(res.S_mixing, "S_m", V_m)))
+        # The conversion factors themselves, so the three columns can be reconciled by hand.
+        if V_m:
+            molar_mass = getattr(res, "molar_mass", None) or getattr(res, "M_avg", None)
+            rows.append(("V_m  [m^3/mol]", V_m, None, None))
+            if molar_mass:
+                rows.append(("rho  [kg/m^3]", None, None, molar_mass / V_m))
         self.results_table.setRowCount(len(rows))
-        for i, (label, mv, massic) in enumerate(rows):
+        for i, (label, mv, massic, volumetric) in enumerate(rows):
             self.results_table.setItem(i, 0, QTableWidgetItem(label))
-            self.results_table.setItem(i, 1, QTableWidgetItem(_fmt(mv) if mv is not None else ""))
-            self.results_table.setItem(
-                i, 2, QTableWidgetItem(_fmt(massic) if massic is not None else "—")
-            )
+            for col, value in ((1, mv), (2, massic), (3, volumetric)):
+                text = _fmt(value) if value is not None else ("" if col == 1 else "—")
+                self.results_table.setItem(i, col, QTableWidgetItem(text))
 
     def _populate_components(self, res) -> None:
         """Fill the per-component contribution table from a mixture result (with a totals row)."""
@@ -1889,3 +1968,32 @@ def _massic_for(molar_key: str) -> str | None:
         "U_m": "U_s", "H_m": "H_s", "S_m": "S_s", "A_m": "A_s", "G_m": "G_s",
         "Cv_m": "Cv_s", "Cp_m": "Cp_s", "mu_m": None, "gamma": None,
     }.get(molar_key)
+
+
+def _molar_volume(res) -> float | None:
+    """Molar volume V/n (m^3/mol) of the reported state, or None if it cannot be formed.
+
+    A pure-gas result carries the resolved ``V`` and ``n``; a mixture result carries only
+    ``T`` and ``P``, so fall back to the ideal-gas ``RT/P`` -- which is the same number,
+    since every state this engine reports is an ideal gas.
+    """
+    V, n = getattr(res, "V", None), getattr(res, "n", None)
+    if V and n:
+        return V / n
+    T, P = getattr(res, "T", None), getattr(res, "P", None)
+    if T and P:
+        return R * T / P
+    return None
+
+
+def _volumetric(molar_value: float | None, molar_key: str, V_m: float | None) -> float | None:
+    """Convert a molar quantity to a per-volume one, where that has a meaning.
+
+    Dividing by the molar volume re-bases an extensive-type quantity from "per mol" to "per
+    m^3". Ratios such as ``gamma`` and the thermal fields ``T_v``/``T_p`` are not extensive
+    and have no per-volume form, so they stay blank -- the same rule that already decides
+    which rows get a massic value.
+    """
+    if molar_value is None or not V_m or _massic_for(molar_key) is None:
+        return None
+    return molar_value / V_m

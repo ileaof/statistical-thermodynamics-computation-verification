@@ -266,15 +266,31 @@ def qss(p: Palette) -> str:
     QMenu::separator {{ height: 1px; background-color: {p.border}; margin: 4px 8px; }}
     QStatusBar {{ background-color: {p.surface}; color: {p.text_muted}; border-top: 1px solid {p.border}; }}
     QToolTip {{ background-color: {p.surface}; color: {p.text}; border: 1px solid {p.border}; border-radius: {p.radius}; padding: 4px 8px; }}
-    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-    QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
-    QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+    /* The handle must contrast with the page, not with the track: at surface_alt on bg it
+       was #eef2f7 on #f4f6f9 -- a ratio of about 1.02:1, which is invisible. Use
+       border_strong for the handle and give the track an edge so the strip is findable. */
+    QScrollBar:vertical {{
         background: {p.surface_alt};
-        border: 1px solid {p.border};
-        border-radius: 4px;
-        min-height: 24px; min-width: 24px;
+        width: 14px;
+        margin: 0;
+        border-left: 1px solid {p.border};
     }}
-    QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {{ background: {p.border_strong}; }}
+    QScrollBar:horizontal {{
+        background: {p.surface_alt};
+        height: 14px;
+        margin: 0;
+        border-top: 1px solid {p.border};
+    }}
+    QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+        background: {p.text_muted};
+        border: none;
+        border-radius: 5px;
+        margin: 2px;
+        min-height: 32px; min-width: 32px;
+    }}
+    QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {{
+        background: {p.text};
+    }}
     QScrollBar::add-line, QScrollBar::sub-line {{ border: none; background: transparent; width: 0; height: 0; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     """
