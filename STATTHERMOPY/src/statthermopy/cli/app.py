@@ -420,22 +420,34 @@ class StatThermoPyShell(Cmd):
 
     def do_transport(self, arg: str) -> None:
         (
-            """Transport properties of the selected gas.
+            """Transport properties of the selected gas **or mixture**.
 
         ``transport``                      — print all properties at the current (T, P)
         ``transport <prop> Tmin Tmax [N] [out.png]``
                                           — plot a property vs T (saved to PNG)
         ``transport binary N2 O2``         — binary diffusion D_ij at current (T, P)
+        ``transport trace=H2O``            — mixtures only: report D_eff/Sc/Le for that species
+
+        With a mixture selected (``mixture CO2:0.5 CH4:0.5``) the Wilke / Mason-Saxena / Blanc
+        engine is used, generic in the number of components. ``transport binary`` always names its
+        own pair of pure gases, so it works either way.
 
         Available props (use any single name): """
             + ", ".join(TRANSPORT_PROPS)
             + """
         """
         )
-        if self.molecule is None:
-            print("  error: select a gas first, e.g.  gas N2")
+        if self.molecule is None and self.mixture is None:
+            print("  error: select a gas or a mixture first, e.g.  gas N2  |  mixture CO2:0.5 CH4:0.5")
             return
         parts = _split(arg)
+
+        # A mixture routes through the Wilke / Mason-Saxena / Blanc engine, which is generic in
+        # the number of components; `transport binary` still names its own pair of pure gases.
+        if self.mixture is not None and not (parts and parts[0] == "binary"):
+            self._mixture_transport(parts)
+            return
+
         if not parts:
             st = self._make_state()
             if st is None:
@@ -460,6 +472,48 @@ class StatThermoPyShell(Cmd):
 
         Ts = np.linspace(Tmin, Tmax, npts)
         ax = plot_transport_vs_T(self.molecule, prop, Ts, P=P)
+        ax.figure.savefig(out, dpi=120, bbox_inches="tight")
+        print(f"  saved plot -> {out}")
+
+    def _mixture_transport(self, parts: list[str]) -> None:
+        """``transport`` on the active mixture: point report, or a property-vs-T plot."""
+        from ..transport.air import AIR_TRANSPORT_ALL_PROPS, MixtureTransportCalculator
+
+        T = self.T if self.T is not None else 298.15
+        P = self.P if self.P is not None else 101325.0
+        trace = None
+        rest: list[str] = []
+        for tok in parts:
+            if tok.lower().startswith("trace="):
+                trace = tok.split("=", 1)[1]
+            else:
+                rest.append(tok)
+        calc = MixtureTransportCalculator(self.mixture, trace=trace)
+
+        if not rest:
+            self._print_air_transport(calc.compute(State(T=T, P=P)))
+            return
+
+        prop = rest[0]
+        if prop not in AIR_TRANSPORT_ALL_PROPS:
+            print(f"  error: unknown property {prop!r}. Choose from: "
+                  f"{', '.join(AIR_TRANSPORT_ALL_PROPS)}")
+            return
+        import numpy as np
+
+        from ..transport.air import plots as ap
+
+        Tmin = float(rest[1]) if len(rest) > 1 else 300.0
+        Tmax = float(rest[2]) if len(rest) > 2 else 1500.0
+        npts = int(float(rest[3])) if len(rest) > 3 else 100
+        out = rest[4] if len(rest) > 4 else f"mixture_{prop}.png"
+        try:
+            _, ax = ap.plot_mixture_property(
+                calc, prop, np.linspace(Tmin, Tmax, npts), P=P, label="mixture"
+            )
+        except ValueError as exc:
+            print(f"  error: {exc}")
+            return
         ax.figure.savefig(out, dpi=120, bbox_inches="tight")
         print(f"  saved plot -> {out}")
 
@@ -675,13 +729,21 @@ class StatThermoPyShell(Cmd):
 
     @staticmethod
     def _print_air_transport(res) -> None:
-        """Pretty-print the air-transport property table for a mixture result."""
+        """Pretty-print the transport table of any gas mixture — air or an arbitrary one.
+
+        ``D_eff``, ``Sc`` and ``Le`` are single-species quantities and exist only when a trace
+        species was named (:class:`~statthermopy.transport.air.AirTransport` names H2O). For a
+        generic mixture they are ``None`` and the per-species ``Sc_i`` table is printed instead.
+        """
         from ..transport.air import AIR_TRANSPORT_LABELS, AIR_TRANSPORT_UNITS
 
-        tag = res.label or ("humid air" if (res.humidity_ratio or 0) > 0 else "dry air")
+        composition = ", ".join(f"{k}={v:.4f}" for k, v in res.x.items())
+        tag = res.label or composition
         w = res.humidity_ratio
         w_s = f", humidity ratio w={w:.4e} kg/kg" if w is not None else ""
-        print(f"  Air transport — {tag} @ T={res.T:.4f} K, P={res.P:.6g} Pa{w_s}")
+        print(f"  Mixture transport — {tag} @ T={res.T:.4f} K, P={res.P:.6g} Pa{w_s}")
+        if not res.label:
+            print(f"    composition (mole): {composition}")
         print(f"    mixing rules: {', '.join(f'{k}={v}' for k, v in res.mixing_rules.items())}")
         for prop in (
             "mu",
@@ -700,18 +762,31 @@ class StatThermoPyShell(Cmd):
             "gamma",
         ):
             val = getattr(res, prop)
+            if val is None:
+                continue        # no trace species named; reported per species below
             unit = AIR_TRANSPORT_UNITS.get(prop, "")
             label = AIR_TRANSPORT_LABELS.get(prop, prop)
             print(f"    {label:30s} = {val:14.6g}  {unit}")
+        if res.trace_species:
+            print(f"    (D_eff, Sc and Le are for the trace species {res.trace_species})")
+        acc = getattr(res, "accuracy", None) or {}
+        if acc:
+            bands = ", ".join(
+                f"{k.replace('_percent', '')} ±{v:.2g}%" for k, v in acc.items()
+            )
+            print(f"    validated accuracy: {bands}")
+        if getattr(res, "accuracy_unvalidated", ()):
+            print(f"    not validated: {', '.join(res.accuracy_unvalidated)}")
         print("  --- Per-species contributions ---")
         print(
             f"    {'Species':6s}{'x':>10s}{'mu_i':>14s}{'k_i':>12s}{'D_im':>14s}"
-            f"{'mu_contrib':>14s}{'k_contrib':>12s}"
+            f"{'Sc_i':>10s}{'mu_contrib':>14s}{'k_contrib':>12s}"
         )
         for name, c in res.components.items():
+            sc_i = res.Sc_i.get(name, 0.0)
             print(
                 f"    {name:6s}{c.x:10.4f}{c.mu_i:14.4e}{c.k_i:12.4e}{c.D_im:14.4e}"
-                f"{c.mu_contrib:14.4e}{c.k_contrib:12.4e}"
+                f"{sc_i:10.4f}{c.mu_contrib:14.4e}{c.k_contrib:12.4e}"
             )
 
     @staticmethod
@@ -856,6 +931,12 @@ def _run_transport(args: argparse.Namespace) -> None:
     from ..transport import binary_diffusion
     from ..transport.plots import plot_transport_vs_T
 
+    if args.mixture or args.fluid:
+        _run_transport_mixture(args)
+        return
+    if not args.gas:
+        print("  error: give --gas, --mixture or --fluid.")
+        return
     if args.binary:
         mol_i = get(args.binary[0])
         mol_j = get(args.binary[1])
@@ -884,6 +965,68 @@ def _run_transport(args: argparse.Namespace) -> None:
         prop = args.prop or "mu"
         Ts = np.linspace(args.Tmin, args.Tmax, args.N)
         ax = plot_transport_vs_T(mol, prop, Ts, P=args.P)
+        ax.figure.savefig(args.png, dpi=120, bbox_inches="tight")
+        print(f"  saved plot -> {args.png}")
+
+
+def _run_transport_mixture(args: argparse.Namespace) -> None:
+    """One-shot transport of an arbitrary ideal-gas mixture (or a predefined fluid).
+
+    Uses the same Wilke / Mason-Saxena / Blanc engine as the air path, on whatever composition is
+    given — the mixing rules are generic in the number of components.
+    """
+    import numpy as np
+
+    from ..transport.air import MixtureTransportCalculator
+
+    if args.fluid:
+        mix = get_fluid(args.fluid).build(water_mole_fraction=0.0)
+        label = str(args.fluid)
+    else:
+        fractions: dict[str, float] = {}
+        for tok in args.mixture:
+            if ":" not in tok:
+                print(f"  error: expected name:fraction, got {tok!r}")
+                return
+            nm, fr = tok.rsplit(":", 1)
+            try:
+                fractions[nm] = float(fr)
+            except ValueError:
+                print(f"  error: cannot parse fraction {fr!r}")
+                return
+        try:
+            mix = IdealGasMixture.from_names(fractions, basis=args.basis)
+        except (KeyError, ValueError) as exc:
+            print(f"  error: {exc}")
+            return
+        label = ""
+
+    calc = MixtureTransportCalculator(mix, trace=args.trace)
+    res = calc.compute(State(T=args.T, P=args.P), label=label)
+
+    if args.prop:
+        from ..transport.air import AIR_TRANSPORT_UNITS
+
+        value = getattr(res, args.prop, None)
+        if value is None:
+            print(
+                f"  error: {args.prop!r} is unavailable. For D_eff/Sc/Le on a generic mixture, "
+                f"name a trace species with --trace."
+            )
+            return
+        print(
+            f"  {args.prop}(mixture) @ T={res.T:.2f} K, P={res.P:.4g} Pa "
+            f"= {value:.6g} {AIR_TRANSPORT_UNITS.get(args.prop, '')}"
+        )
+    else:
+        StatThermoPyShell._print_air_transport(res)
+
+    if args.png:
+        prop = args.prop or "mu"
+        from ..transport.air import plots as ap
+
+        Ts = np.linspace(args.Tmin, args.Tmax, args.N)
+        _, ax = ap.plot_mixture_property(calc, prop, Ts, P=args.P, label=label or "mixture")
         ax.figure.savefig(args.png, dpi=120, bbox_inches="tight")
         print(f"  saved plot -> {args.png}")
 
@@ -1012,7 +1155,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # one-shot transport
     tr = sub.add_parser("transport", help="one-shot transport properties")
-    tr.add_argument("--gas", required=True, help="gas name")
+    tr.add_argument("--gas", help="pure gas name")
+    tr.add_argument(
+        "--mixture", nargs="+", help="mixture spec, e.g. CO2:0.5 CH4:0.5 (Wilke/Mason-Saxena/Blanc)"
+    )
+    tr.add_argument("--fluid", help="predefined fluid, e.g. Air (overrides --gas/--mixture)")
+    tr.add_argument("--basis", default="mole", choices=["mole", "mass"])
+    tr.add_argument(
+        "--trace",
+        help="species for the single-value D_eff/Sc/Le of a mixture; omitted, they are "
+        "reported per species instead",
+    )
     tr.add_argument("--T", type=float, default=300.0, help="temperature (K)")
     tr.add_argument("--P", type=float, default=101325.0, help="pressure (Pa)")
     tr.add_argument(

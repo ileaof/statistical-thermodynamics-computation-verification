@@ -1343,7 +1343,94 @@ tem precedência sobre <code>--prop</code>.</p>
 &gt; transport mu 300 1500 100 n2_mu.png</code></pre>
 </div>
 
-<h3>8.4 Transporte do ar seco e do ar úmido</h3>
+<h3>8.4 Transporte de uma mistura qualquer</h3>
+
+<p><strong>Objetivo.</strong> Obter as propriedades de transporte de uma composição arbitrária — não
+apenas do ar. As regras de mistura (Wilke para μ, Mason–Saxena para <em>k</em>, Blanc para a
+difusão) são genéricas no número de componentes, e a mesma sintaxe de <code>run --mixture</code>
+vale aqui.</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --mixture CO2:0.5 CH4:0.5 --T 300 --P 101325</code></pre>
+</div>
+
+<div class="output">
+  <div class="outhead">saída</div>
+<pre>  Mixture transport — CO2=0.5000, CH4=0.5000 @ T=300.0000 K, P=101325 Pa
+    composition (mole): CO2=0.5000, CH4=0.5000
+    mixing rules: mu=Wilke, k=Mason-Saxena, D_im=Blanc
+    Dynamic viscosity              =    1.35878e-05  Pa·s
+    Kinematic viscosity            =    1.11401e-05  m^2/s
+    Thermal conductivity           =      0.0220342  W/m/K
+    Thermal diffusivity            =    1.48936e-05  m^2/s
+    Prandtl number                 =       0.747979  -
+    Density                        =        1.21972  kg/m^3
+    Specific gas constant          =        276.909  J/kg/K
+    Speed of sound                 =        328.098  m/s
+    Heat-capacity ratio            =        1.29583  -
+    validated accuracy: viscosity ±3.8%, conductivity ±5.2%, diffusion ±6.5%
+  --- Per-species contributions ---
+    Species         x          mu_i         k_i          D_im      Sc_i    mu_contrib   k_contrib
+    CO2       0.5000    1.5186e-05  1.7565e-02    1.6388e-05    0.6798    9.0182e-06  1.2114e-02
+    CH4       0.5000    1.0495e-05  3.2744e-02    1.6388e-05    0.6798    4.5696e-06  9.9198e-03</pre>
+</div>
+
+<p><strong>Como interpretar.</strong> μ = 1,359 × 10⁻⁵ Pa·s fica <em>entre</em> os puros
+(CO₂ 1,519 × 10⁻⁵, CH₄ 1,050 × 10⁻⁵), mas não na média molar — a regra de Wilke pondera pelas
+massas. Já <em>k</em> = 0,0220 W/m·K está abaixo da média dos puros (0,0176 e 0,0327), porque o
+metano, muito mais condutivo, é também muito mais leve. Num binário
+<code>D_CO₂,m = D_CH₄,m</code>: a lei de Blanc se reduz a <em>D<sub>AB</sub></em> para ambas, como
+deve. A linha <em>validated accuracy</em> traz as bandas de erro medidas, ponderadas pela
+composição (Seção <a href="#validacao">13</a>).</p>
+
+<div class="callout note">
+  <span class="label">Sc e Le exigem uma espécie nomeada</span>
+  Numa mistura genérica não há traçador natural, então <code>D_eff</code>, <code>Sc</code> e
+  <code>Le</code> saem por espécie na coluna <code>Sc_i</code> e ficam fora do bloco escalar. Para
+  obter o trio de uma espécie específica — inclusive uma que não pertença à mistura —, nomeie-a:
+  <div class="codeblock" style="margin-top:.7rem;margin-bottom:0;">
+    <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy transport --mixture CO2:0.5 CH4:0.5 --trace H2O --T 300</code></pre>
+  </div>
+</div>
+
+<p>Outras formas:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code># uma propriedade só
+statthermopy transport --mixture CO2:0.5 CH4:0.5 --prop mu --T 300
+
+# base mássica em vez de molar
+statthermopy transport --mixture CO2:0.5 CH4:0.5 --basis mass --T 300
+
+# fluido predefinido
+statthermopy transport --fluid Air --T 300
+
+# curva vs T
+statthermopy transport --mixture CO2:0.5 CH4:0.5 --prop k     --Tmin 300 --Tmax 1000 --N 100 --png co2ch4_k.png</code></pre>
+</div>
+
+<p>No terminal interativo, a mistura ativa é usada automaticamente:</p>
+
+<div class="codeblock">
+  <div class="codehead"><span class="codelang">text</span><button class="copy-btn" type="button">Copiar</button></div>
+<pre><code>statthermopy
+&gt; mixture CO2:0.5 CH4:0.5
+&gt; T = 300
+&gt; P = 101325
+&gt; transport
+&gt; transport trace=H2O
+&gt; transport mu 300 1000 100 co2ch4_mu.png
+&gt; transport binary CO2 CH4</code></pre>
+</div>
+
+<p><code>transport binary</code> nomeia sempre o próprio par de gases puros, então continua
+funcionando com ou sem mistura selecionada. Selecionar um gás com <code>gas N2</code> volta ao
+caminho de gás puro.</p>
+
+<h3>8.5 Transporte do ar seco e do ar úmido</h3>
 
 <p>O subcomando <code>airtransport</code> aplica regras de mistura — Wilke para μ, Mason–Saxena
 para <em>k</em> e Blanc para a difusividade efetiva — à composição do ar, seco ou úmido.</p>
@@ -1732,8 +1819,8 @@ executa um cálculo direto e encerra.</p>
       </tr>
       <tr>
         <td><code>transport</code></td>
-        <td><code>--gas</code> <em>(obrigatório)</em>, <code>--T</code> (300), <code>--P</code> (101325), <code>--prop</code>, <code>--binary A B</code>, <code>--Tmin</code> (300), <code>--Tmax</code> (1500), <code>--N</code> (100), <code>--png</code></td>
-        <td>Propriedades de transporte de um gás puro e difusão binária.</td>
+        <td><code>--gas</code> <em>ou</em> <code>--mixture A:x B:y</code> <em>ou</em> <code>--fluid</code>, <code>--T</code> (300), <code>--P</code> (101325), <code>--prop</code>, <code>--trace</code>, <code>--basis</code>, <code>--binary A B</code>, <code>--Tmin</code> (300), <code>--Tmax</code> (1500), <code>--N</code> (100), <code>--png</code></td>
+        <td>Propriedades de transporte de um gás puro <strong>ou de uma mistura qualquer</strong>, e difusão binária.</td>
       </tr>
       <tr>
         <td><code>humidair</code></td>
@@ -1782,7 +1869,7 @@ statthermopy airtransport --T 300 --P 101325 --rh 0.50</code></pre>
       <tr><td><code>modes</code></td><td><code>modes</code></td><td>Desagregação por modo da função de partição.</td></tr>
       <tr><td><code>plot</code></td><td><code>plot Cp_m 300 1500 100 saida.png</code></td><td>Gráfico de propriedade vs <em>T</em>.</td></tr>
       <tr><td><code>export</code></td><td><code>export csv saida.csv</code></td><td>Exporta o último resultado de gás puro.</td></tr>
-      <tr><td><code>transport</code></td><td><code>transport</code> · <code>transport mu 300 1500 100 f.png</code> · <code>transport binary N2 O2</code></td><td>Propriedades de transporte, curvas e difusão binária.</td></tr>
+      <tr><td><code>transport</code></td><td><code>transport</code> · <code>transport mu 300 1500 100 f.png</code> · <code>transport trace=H2O</code> · <code>transport binary N2 O2</code></td><td>Propriedades de transporte do gás <strong>ou da mistura</strong> ativa, curvas e difusão binária.</td></tr>
       <tr><td><code>humidair</code></td><td><code>humidair [rh=|w=|x=]</code> · <code>humidair psat 273.16 373.15 100 f.png</code></td><td>Ar úmido: estado pontual ou curvas.</td></tr>
       <tr><td><code>airtransport</code></td><td><code>airtransport [humid|species|db|export|&lt;prop&gt;]</code></td><td>Transporte do ar seco e úmido.</td></tr>
       <tr><td><code>quit</code></td><td><code>quit</code>, <code>exit</code> ou Ctrl-D</td><td>Encerra o terminal.</td></tr>

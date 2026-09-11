@@ -34,6 +34,7 @@ from .analysis import AirTransportAnalysis
 from .export import AirTransportExporter
 from .mixture_transport import (
     AIR_TRANSPORT_LABELS,
+    AIR_TRANSPORT_ALL_PROPS,
     AIR_TRANSPORT_PROPS,
     AIR_TRANSPORT_UNITS,
     MixtureTransportCalculator,
@@ -62,6 +63,7 @@ __all__ = [
     "wilke_viscosity",
     "mason_saxena_conductivity",
     "blanc_diffusion",
+    "AIR_TRANSPORT_ALL_PROPS",
     "AIR_TRANSPORT_PROPS",
     "AIR_TRANSPORT_UNITS",
     "AIR_TRANSPORT_LABELS",

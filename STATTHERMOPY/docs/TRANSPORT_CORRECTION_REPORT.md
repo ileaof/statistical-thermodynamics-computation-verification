@@ -26,7 +26,7 @@ substituídos.
 | Erro de Pr(ar seco) | +4,3 % | **+0,9 %** |
 | Mistura de 30 componentes | 81 ms/ponto | **13,2 ms/ponto** |
 | Caminho vetorizado | inexistente | **310 000 pontos/s** (5 espécies) |
-| Testes | 545 | **671** |
+| Testes | 545 | **700** |
 
 Dois resultados **negativos** foram estabelecidos por medição, e ambos importam mais que os
 positivos:
@@ -700,4 +700,4 @@ o de um seco — informação que antes existia apenas neste relatório.
 | `tests/test_transport_kernel.py` | **novo** — 38 testes |
 | `tests/test_air_transport.py` | traçador explícito no caminho de referência |
 
-**671 testes**, todos passando (exceto o `test_gui.py` pré-existente).
+**700 testes**, todos passando (exceto o `test_gui.py` pré-existente).

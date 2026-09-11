@@ -18,6 +18,7 @@ from .analysis import AirTransportAnalysis
 from .mixture_transport import AIR_TRANSPORT_LABELS, AIR_TRANSPORT_UNITS
 
 __all__ = [
+    "plot_mixture_property",
     "plot_air_transport",
     "plot_air_transport_comparison",
     "plot_air_transport_vs_T",
@@ -56,6 +57,60 @@ def _resolve_model(model) -> AirTransport:
     if isinstance(model, AirTransportAnalysis):
         return model.model
     return model if model is not None else AirTransport()
+
+
+def plot_mixture_property(
+    calculator,
+    prop: str,
+    T_range: Iterable[float],
+    P: float = 101325.0,
+    *,
+    label: str = "mixture",
+    ax=None,
+):
+    """Plot one transport property of an arbitrary gas mixture against temperature.
+
+    Works for any composition, not just air: ``calculator`` is a
+    :class:`~statthermopy.transport.air.MixtureTransportCalculator`, whose mixing rules are
+    generic in the number of components.
+
+    Parameters
+    ----------
+    calculator : MixtureTransportCalculator
+        The mixture evaluator.
+    prop : str
+        Any attribute of :class:`~statthermopy.transport.air.MixtureTransportProperties`.
+    T_range : iterable of float
+        Temperatures (K).
+    P : float
+        Pressure (Pa).
+    label : str
+        Legend label for the curve.
+    ax : matplotlib axes, optional
+        Axes to draw on; a new figure is created when omitted.
+
+    Returns
+    -------
+    (figure, axes)
+    """
+    from .mixture_transport import AIR_TRANSPORT_LABELS, AIR_TRANSPORT_UNITS
+
+    Ts, values = calculator.property_vs_T(prop, T_range, P)
+    if any(v is None for v in values):
+        raise ValueError(
+            f"{prop!r} is None for this mixture. D_eff, Sc and Le need a trace species: build "
+            "the calculator with trace='<species>'."
+        )
+    ax = _new_ax(ax)
+    ax.plot(Ts, values, lw=2, label=label)
+    unit = AIR_TRANSPORT_UNITS.get(prop, "")
+    name = AIR_TRANSPORT_LABELS.get(prop, prop)
+    ax.set_xlabel("Temperature [K]")
+    ax.set_ylabel(f"{name}" + (f" [{unit}]" if unit and unit != "-" else ""))
+    ax.set_title(f"{name} vs temperature at {P / 1000:.4g} kPa")
+    ax.grid(alpha=0.3)
+    ax.legend()
+    return ax.figure, ax
 
 
 def plot_air_transport(
