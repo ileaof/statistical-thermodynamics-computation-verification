@@ -18,3 +18,13 @@ lennard_jones:
   sigma_angstrom: 4.112
   epsilon_over_k: 335.4
   note: "Poling/PCO; polar - LJ approximate"
+
+# Validated accuracy of the transport coefficients. Metadata only: nothing here enters
+# a calculation. Recorded so a consumer (a CFD solver, say) can see which coefficients
+# it can trust and which it cannot.
+transport_accuracy:
+  viscosity_percent: 1.3
+  conductivity_percent: 4.9
+  diffusion_percent: 12.0
+  basis: "Measured at 300 K against Poling/PCO and CRC (mu, k) and tabulated binary D; see docs/TRANSPORT_CORRECTION_REPORT.md"
+  limitation: "Strongly polar: internal-energy transport is suppressed by resonant dipolar exchange (required f_int = 0.91 vs the >= 1 that every mass-diffusion model gives). Beyond Eucken and Mason-Monchick alike."

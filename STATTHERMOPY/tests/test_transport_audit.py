@@ -506,3 +506,77 @@ class TestMasonMonchickConductivity:
             ]
             assert all(k > 0 for k in ks), name
             assert ks == sorted(ks), f"k({name}) not increasing with T"
+
+
+# --------------------------------------- Phase 2c: machine-readable accuracy bands
+
+
+class TestTransportAccuracyMetadata:
+    """The model's known limits must be readable by a consumer, not buried in a report.
+
+    Two residuals survive, both with a proven cause: conductivity of strongly polar species
+    (the required internal-transport factor lies outside what any mass-diffusion model can
+    reach) and a systematic low bias in binary diffusion (the LJ parameters are
+    viscosity-derived, and a 12-6 potential cannot fit both). Neither is fixable by parameter
+    choice, so they are declared instead of hidden.
+    """
+
+    def test_validated_species_carry_bands(self):
+        validated = [n for n in list_molecules() if get(n).transport_accuracy is not None]
+        assert len(validated) >= 20
+
+    def test_unvalidated_species_say_so_rather_than_guessing(self):
+        """A species with no reference data must report None, not an invented number."""
+        assert get("I2").transport_accuracy is None
+        r = TransportCalculator(get("I2"), State(T=T0, P=P0)).compute()
+        assert r.accuracy is None
+
+    def test_bands_are_metadata_and_never_enter_a_calculation(self):
+        """Stripping the band must not move a single computed number."""
+        import dataclasses
+
+        mol = get("H2O")
+        stripped = dataclasses.replace(mol, transport_accuracy=None)
+        a = TransportCalculator(mol, State(T=T0, P=P0)).compute()
+        b = TransportCalculator(stripped, State(T=T0, P=P0)).compute()
+        for prop in ("mu", "k", "D_self", "Pr", "Sc", "Le", "rho", "alpha", "nu"):
+            assert getattr(a, prop) == getattr(b, prop), prop
+
+    def test_polar_conductivity_is_flagged_as_uncertain(self):
+        """k(H2O) is 25 % out; a consumer must be able to see that."""
+        acc = TransportCalculator(get("H2O"), State(T=T0, P=P0)).compute().accuracy
+        assert acc.conductivity_percent > 20.0
+        assert "polar" in acc.limitation.lower()
+
+    def test_well_behaved_species_are_flagged_as_accurate(self):
+        acc = TransportCalculator(get("N2"), State(T=T0, P=P0)).compute().accuracy
+        assert acc.conductivity_percent < 2.0
+        assert acc.viscosity_percent < 2.0
+
+    def test_diffusion_band_records_the_systematic_bias(self):
+        """Binary D is low by ~5 % even for non-polar pairs; the band must not claim better."""
+        for name in ("N2", "O2", "CO2"):
+            acc = get(name).transport_accuracy
+            assert acc.diffusion_percent >= 4.0, name
+            assert "viscosity-derived" in acc.limitation
+
+    def test_mixture_band_is_mole_weighted(self):
+        r = _mix({"N2": 0.5, "H2O": 0.5}).compute(State(T=T0, P=P0))
+        n2 = get("N2").transport_accuracy.conductivity_percent
+        h2o = get("H2O").transport_accuracy.conductivity_percent
+        assert r.accuracy["conductivity_percent"] == pytest.approx(0.5 * (n2 + h2o), rel=1e-9)
+
+    def test_humidity_raises_the_conductivity_band(self):
+        """Adding water must make the mixture's stated uncertainty grow, not stay flat."""
+        from statthermopy.transport.air import AirTransport
+
+        dry = AirTransport().dry(T0, P0).accuracy["conductivity_percent"]
+        wet = AirTransport().humid(T0, P0, relative_humidity=1.0).accuracy[
+            "conductivity_percent"
+        ]
+        assert wet > dry
+
+    def test_unvalidated_components_are_listed(self):
+        r = _mix({"N2": 0.5, "I2": 0.5}).compute(State(T=T0, P=P0))
+        assert "I2" in r.accuracy_unvalidated
+        assert "N2" not in r.accuracy_unvalidated

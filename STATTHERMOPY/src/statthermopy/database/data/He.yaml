@@ -14,3 +14,13 @@ lennard_jones:
   sigma_angstrom: 2.551
   epsilon_over_k: 10.22
   note: "Poling/PCO; quantum fluid - LJ approximate"
+
+# Validated accuracy of the transport coefficients. Metadata only: nothing here enters
+# a calculation. Recorded so a consumer (a CFD solver, say) can see which coefficients
+# it can trust and which it cannot.
+transport_accuracy:
+  viscosity_percent: 1.7
+  conductivity_percent: 1.7
+  diffusion_percent: 3.0
+  basis: "Measured at 300 K against Poling/PCO and CRC (mu, k) and tabulated binary D; see docs/TRANSPORT_CORRECTION_REPORT.md"
+  limitation: "Binary D is systematically low: the LJ parameters are viscosity-derived and a 12-6 potential cannot fit mu and D at once."

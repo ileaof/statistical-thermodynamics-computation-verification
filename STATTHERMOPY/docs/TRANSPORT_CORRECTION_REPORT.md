@@ -26,7 +26,7 @@ substituídos.
 | Erro de Pr(ar seco) | +4,3 % | **+0,9 %** |
 | Mistura de 30 componentes | 81 ms/ponto | **13,2 ms/ponto** |
 | Caminho vetorizado | inexistente | **310 000 pontos/s** (5 espécies) |
-| Testes | 545 | **662** |
+| Testes | 545 | **671** |
 
 Dois resultados **negativos** foram estabelecidos por medição, e ambos importam mais que os
 positivos:
@@ -541,10 +541,128 @@ Para escoamento com vapor d'água, k(H₂O) segue sendo o item mais sério.
 
 ---
 
+---
+
+## DIAGNÓSTICO FINAL DOS RESÍDUOS
+
+Os dois resíduos restantes foram levados até a causa, e ambos se revelaram **estruturais** — não
+são escolha de parâmetro nem de correlação.
+
+### R-1 · Condutividade das polares: o fator de transporte interno
+
+Decompondo `k·M/μ = f_tr·C_v,tr + f_int·C_v,int` com `f_tr = 5/2`, extrai-se o fator de transporte
+de energia interna que cada referência **exige**, e compara-se com o que cada modelo **prevê**:
+
+| Espécie | δ | C_v,int | f_int exigido | Eucken prevê | Mason–Monchick prevê | ρD/μ |
+|---|---:|---:|---:|---:|---:|---:|
+| H₂ | 0 | 8,31 | 1,310 | 1,000 | 1,314 | 1,317 |
+| N₂ | 0 | 8,33 | 1,170 | 1,000 | 1,163 | 1,314 |
+| O₂ | 0 | 8,56 | 1,161 | 1,000 | 1,160 | 1,313 |
+| CH₄ | 0 | 14,92 | 1,203 | 1,000 | 1,265 | 1,313 |
+| Cl₂ | 0 | 13,03 | 1,215 | 1,000 | 1,192 | 1,369 |
+| C₂H₆ | 0 | 31,35 | 1,169 | 1,000 | 1,236 | 1,325 |
+| CO | 0 | 8,34 | 0,978 | 1,000 | 1,072 | 1,313 |
+| CO₂ | 0 | 16,35 | 1,072 | 1,000 | 1,207 | 1,319 |
+| **H₂O** | 1,00 | 12,70 | **0,382** | 1,000 | — | 1,508 |
+| **NH₃** | 0,70 | 14,74 | **0,710** | 1,000 | — | 1,491 |
+| **SO₂** | 0,42 | 19,12 | **0,909** | 1,000 | — | 1,379 |
+| **H₂S** | 0,20 | 13,41 | **0,539** | 1,000 | — | 1,361 |
+
+As não polares exigem f_int ≈ 1,16 e Mason–Monchick prevê 1,07–1,31 — é por isso que funciona
+para elas. **As polares exigem f_int abaixo de 1**, e todo modelo ancorado na difusão de massa
+prevê ≥ 1.
+
+**Teste de falsificação.** Varrendo Z_rot de 0 a ∞ — os limites de relaxação instantânea e de
+relaxação nula — obtém-se todo o intervalo que a forma de Mason–Monchick pode produzir:
+
+| Espécie | f_int alvo | MM com Z→0 | MM com Z→∞ | alvo alcançável? |
+|---|---:|---:|---:|---|
+| H₂O | 0,382 | 1,268 | 1,508 | **não** |
+| NH₃ | 0,710 | 1,276 | 1,491 | **não** |
+| SO₂ | 0,909 | 1,168 | 1,379 | **não** |
+| H₂S | 0,539 | 1,049 | 1,361 | **não** |
+
+O alvo cai fora do intervalo inteiro nas quatro. **Nenhum valor de Z_rot reproduz k**: a forma do
+modelo é estruturalmente incapaz, e o problema nunca foi a escolha do parâmetro. Isto é mais forte
+que o achado anterior ("com o Z_rot medido fica pior") e encerra essa via.
+
+Fisicamente: numa molécula fortemente polar a troca ressonante dipolo–dipolo **embaralha** energia
+rotacional entre moléculas vizinhas em vez de carregá-la gradiente abaixo, suprimindo o fluxo
+líquido. Modelar isso exige uma difusividade de energia interna desacoplada da difusão de massa —
+física nova, não um parâmetro novo.
+
+### R-2 · Difusão binária sistematicamente baixa
+
+Os mesmos σ e ε produzem viscosidade boa e difusão ruim:
+
+| | erro médio |
+|---|---:|
+| μ, 7 gases não polares | **1,7 %** |
+| D, 8 pares não polares | **−4,6 %** (média com sinal — viés, não dispersão) |
+| D, 6 pares com espécie polar | **−16,1 %** |
+
+O viés tem sinal único. A causa está anotada nos próprios YAMLs: os parâmetros são **derivados de
+viscosidade**, e um potencial 12-6 não ajusta μ e D simultaneamente — limitação conhecida do LJ,
+não do código.
+
+**Regra de Brokaw testada.** Para pares polar–não polar, com a polarizabilidade do parceiro:
+
+| Par | LJ atual | Brokaw | experimental |
+|---|---:|---:|---:|
+| H₂O–N₂ | −15,5 % | −13,6 % | 2,56e-5 |
+| H₂O–O₂ | −23,3 % | −21,4 % | 2,82e-5 |
+| H₂O–He | −7,0 % | −2,9 % | 9,08e-5 |
+| **médio** | **16,1 %** | **13,7 %** | |
+
+Ganho de 2,4 pontos ao custo de introduzir polarizabilidades para 14 espécies, deixando ainda
+−13,7 %. **Não adotado**: o resíduo é dominado pelo viés de R-2, que Brokaw não toca. Corrigi-lo
+de fato exigiria um segundo conjunto de parâmetros derivado de difusão — trabalho de dados, não de
+física.
+
+### O que foi implementado: bandas de acurácia legíveis por máquina
+
+Já que nenhum dos dois resíduos é reparável sem física ou dados novos, o reparo possível é tornar
+os limites **explícitos e rastreáveis**, como pedia o §27 do escopo original. Cada espécie
+validada declara em seu YAML as bandas medidas:
+
+```yaml
+transport_accuracy:
+  viscosity_percent: 2.3
+  conductivity_percent: 25.0
+  diffusion_percent: 16.0
+  basis: "Measured at 300 K against Poling/PCO and CRC..."
+  limitation: "Strongly polar: internal-energy transport is suppressed by resonant..."
+```
+
+Expostas em `TransportProperties.accuracy` e, ponderadas por fração molar, em
+`MixtureTransportProperties.accuracy`. **São metadados: um teste verifica que remover a banda não
+move nenhum número calculado.** Espécies sem dado de referência declaram `None` em vez de inventar
+um valor, e a mistura lista em `accuracy_unvalidated` quais componentes não têm banda.
+
+O efeito prático para um consumidor de CFD:
+
+| | k | banda de k |
+|---|---:|---:|
+| N₂ puro | 0,02582 | **0,7 %** |
+| H₂O puro | 0,02441 | **25,0 %** |
+| I₂ puro | 0,00254 | **não validada** |
+| ar seco | 0,02584 | 0,70 % |
+| ar a 50 % UR | 0,02583 | 1,12 % |
+| ar saturado | 0,02582 | **1,55 %** |
+
+A banda do ar **cresce com a umidade**, porque a incerteza da água entra ponderada pela sua fração.
+Um solver passa a poder ver que o termo ∇·(k∇T) de um escoamento úmido carrega mais incerteza que
+o de um seco — informação que antes existia apenas neste relatório.
+
+
 ## REMAINING LIMITATIONS
 
-1. **k de espécies polares** — 15,2 % médio nos quatro polares, 24,5 % em H₂O. Causa
-   identificada (relaxação rotacional); correção exigiria Mason–Monchick com Z_rot.
+1. **k de espécies polares** — 15,2 % médio nos quatro polares, 24,5 % em H₂O. Causa **provada**
+   estrutural (§DIAGNÓSTICO FINAL, R-1): o f_int exigido está fora do alcance de Mason–Monchick
+   para qualquer Z_rot. Exige física de troca ressonante, não um parâmetro. Declarado na banda de
+   acurácia da espécie.
+1b. **D binário com viés de −4,6 % (não polar) a −16 % (polar)** — causa **provada** (R-2): os
+   σ/ε são derivados de viscosidade. Exigiria um segundo conjunto derivado de difusão.
 2. **Stockmayer só em H₂O** — NH₃, SO₂ e H₂S têm o bloco disponível mas não recebem, porque a
    medição não mostrou ganho. Revisitar se surgirem parâmetros melhores.
 3. **Difusão binária usa LJ mesmo para pares polares** — o refinamento de Stockmayer atinge só os
@@ -582,4 +700,4 @@ Para escoamento com vapor d'água, k(H₂O) segue sendo o item mais sério.
 | `tests/test_transport_kernel.py` | **novo** — 38 testes |
 | `tests/test_air_transport.py` | traçador explícito no caminho de referência |
 
-**662 testes**, todos passando (exceto o `test_gui.py` pré-existente).
+**671 testes**, todos passando (exceto o `test_gui.py` pré-existente).

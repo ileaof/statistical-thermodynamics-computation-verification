@@ -21,3 +21,13 @@ lennard_jones:
 rotational_relaxation:
   z_rot_298: 4.0
   reference: "Chemkin/Cantera transport database; ultrasonic relaxation measurements. Independent of any conductivity fit."
+
+# Validated accuracy of the transport coefficients. Metadata only: nothing here enters
+# a calculation. Recorded so a consumer (a CFD solver, say) can see which coefficients
+# it can trust and which it cannot.
+transport_accuracy:
+  viscosity_percent: 0.6
+  conductivity_percent: 0.7
+  diffusion_percent: 5.0
+  basis: "Measured at 300 K against Poling/PCO and CRC (mu, k) and tabulated binary D; see docs/TRANSPORT_CORRECTION_REPORT.md"
+  limitation: "Binary D is systematically low: the LJ parameters are viscosity-derived and a 12-6 potential cannot fit mu and D at once."

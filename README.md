@@ -347,14 +347,14 @@ mixtures, from translational / rotational / vibrational / electronic modes; a
 30-species YAML database; automatic validation against embedded NIST/JANAF
 references; a scientific CLI; an optional Qt (PySide6) GUI; property-vs-T plots
 and CSV/JSON/YAML/Excel/LaTeX export; and pluggable NumPy / Numba / OpenMP / CUDA
-backends (same physics, 100×+ speedups). 662 tests, ~96 % coverage.
+backends (same physics, 100×+ speedups). 671 tests, ~96 % coverage.
 
 StatThermoPy is **self-contained and installed separately** (Python ≥ 3.11):
 
 ```bash
 cd STATTHERMOPY
 pip install -e ".[dev]"               # add ,gui and/or ,accel for the GUI / Numba
-pytest -q                              # 662 tests
+pytest -q                              # 671 tests
 statthermopy run --gas N2 --T 298.15   # Cp_m = 29.1129 J/mol/K, purely from Q
 ```
 

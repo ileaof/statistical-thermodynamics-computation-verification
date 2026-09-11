@@ -45,6 +45,7 @@ from ..core.molecule import (
     Molecule,
     RotationalRelaxation,
     Stockmayer,
+    TransportAccuracy,
     VibrationalMode,
 )
 
@@ -122,6 +123,21 @@ def load_molecule(data: dict) -> Molecule:
             reference=str(rr_block.get("reference", "")),
         )
 
+    ta_block = data.get("transport_accuracy")
+    transport_accuracy = None
+    if ta_block:
+        def _pct(key):
+            v = ta_block.get(key)
+            return float(v) if v is not None else None
+
+        transport_accuracy = TransportAccuracy(
+            viscosity_percent=_pct("viscosity_percent"),
+            conductivity_percent=_pct("conductivity_percent"),
+            diffusion_percent=_pct("diffusion_percent"),
+            basis=str(ta_block.get("basis", "")),
+            limitation=str(ta_block.get("limitation", "")),
+        )
+
     anh_block = data.get("anharmonicity")
     anharmonicity = None
     if anh_block:
@@ -149,6 +165,7 @@ def load_molecule(data: dict) -> Molecule:
         lennard_jones=lennard_jones,
         stockmayer=stockmayer,
         rotational_relaxation=rotational_relaxation,
+        transport_accuracy=transport_accuracy,
         anharmonicity=anharmonicity,
     )
 

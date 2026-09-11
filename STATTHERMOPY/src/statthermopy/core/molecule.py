@@ -31,6 +31,7 @@ __all__ = [
     "LennardJones",
     "Stockmayer",
     "RotationalRelaxation",
+    "TransportAccuracy",
     "Molecule",
 ]
 
@@ -201,6 +202,41 @@ class Anharmonicity:
             v[i] = 1
             out.append(self.term_value_cm1(tuple(v)) - zero)
         return tuple(out)
+
+
+@dataclass(frozen=True)
+class TransportAccuracy:
+    """Validated accuracy of a species' transport coefficients, as measured, not as hoped.
+
+    Every model here has a known range of validity, and the ranges differ sharply by property
+    and by species: viscosity is good to a couple of percent across the board, while the
+    conductivity of a strongly polar molecule can be 25 % out and binary diffusion carries a
+    systematic low bias. A solver consuming these numbers should be able to see that, so the
+    bands are carried with the result instead of living only in a report.
+
+    The values are **measurements against named references over a named range**, recorded by the
+    audit in ``docs/TRANSPORT_CORRECTION_REPORT.md``. They are metadata: nothing here enters a
+    calculation, and changing one cannot change a computed property.
+
+    Attributes
+    ----------
+    viscosity_percent : float or None
+        Typical |error| of ``mu`` against the reference, in percent.
+    conductivity_percent : float or None
+        Typical |error| of ``k``.
+    diffusion_percent : float or None
+        Typical |error| of binary diffusion coefficients involving this species.
+    basis : str
+        What the numbers were measured against, and over what range.
+    limitation : str
+        The dominant physical reason for the residual, when one is identified.
+    """
+
+    viscosity_percent: float | None = None
+    conductivity_percent: float | None = None
+    diffusion_percent: float | None = None
+    basis: str = ""
+    limitation: str = ""
 
 
 @dataclass(frozen=True)
@@ -453,6 +489,7 @@ class Molecule:
     lennard_jones: LennardJones | None = None
     stockmayer: Stockmayer | None = None
     rotational_relaxation: RotationalRelaxation | None = None
+    transport_accuracy: TransportAccuracy | None = None
     anharmonicity: Anharmonicity | None = None
 
     def __post_init__(self) -> None:

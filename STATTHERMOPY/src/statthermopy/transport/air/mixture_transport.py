@@ -258,6 +258,11 @@ class MixtureTransportProperties:
     cv_s: float                       # J/kg/K
     cp_s: float                       # J/kg/K
     R_specific: float                 # J/kg/K
+    #: Mole-fraction-weighted |error| bands of the mixture's coefficients (percent). A species
+    #: without a validated band contributes nothing and is listed in ``accuracy_unvalidated``.
+    accuracy: dict = field(default_factory=dict)
+    #: Components carrying no validated accuracy band.
+    accuracy_unvalidated: tuple = ()
     # provenance
     mixing_rules: dict = field(default_factory=dict)
     # per-species breakdown
@@ -427,6 +432,27 @@ class MixtureTransportCalculator:
         beta = (1.0 / T) if T > 0.0 else 0.0
         kappa_T = (1.0 / P) if P > 0.0 else 0.0
 
+        # Mole-fraction-weighted accuracy bands. A mixture is only as trustworthy as its
+        # components, and a little water vapour drags the conductivity band up sharply.
+        acc: dict[str, float] = {}
+        unvalidated: list[str] = []
+        for key in ("viscosity_percent", "conductivity_percent", "diffusion_percent"):
+            total = 0.0
+            weight = 0.0
+            for (mol, xi) in items:
+                ta = mol.transport_accuracy
+                value = getattr(ta, key, None) if ta is not None else None
+                if value is None:
+                    continue
+                total += xi * float(value)
+                weight += xi
+            if weight > 0.0:
+                acc[key] = total / weight
+        for (mol, _xi) in items:
+            if mol.transport_accuracy is None:
+                unvalidated.append(mol.name)
+        unvalidated = tuple(unvalidated)
+
         # per-species contribution breakdown
         components: dict[str, SpeciesTransportContribution] = {}
         for idx, (mol, xi) in enumerate(items):
@@ -448,6 +474,7 @@ class MixtureTransportCalculator:
             Pr=Pr,
             Z=Z, a=a, beta=beta, kappa_T=kappa_T,
             rho=rho, gamma=gamma, cv_s=cv_s, cp_s=cp_s, R_specific=R_specific,
+            accuracy=acc, accuracy_unvalidated=unvalidated,
             mixing_rules={"mu": "Wilke", "k": "Mason-Saxena", "D_im": "Blanc"},
             components=components,
         )

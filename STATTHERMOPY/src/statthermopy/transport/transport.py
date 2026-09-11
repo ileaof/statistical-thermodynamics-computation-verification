@@ -131,6 +131,9 @@ class TransportProperties:
     gamma: float
     cv_s: float        # massic Cv               [J/kg/K]
     cp_s: float        # massic Cp               [J/kg/K]
+    #: Validated |error| bands of this species' coefficients (percent), or ``None`` when the
+    #: species has not been validated. Metadata: it never enters a calculation.
+    accuracy: object | None = None
 
     def as_dict(self) -> dict:
         """Flat dictionary view suitable for export."""
@@ -312,6 +315,7 @@ class TransportCalculator:
             mu=mu, nu=nu, k=k_th, alpha=alpha, D_self=D_self,
             Pr=Pr, Sc=Sc, Le=Le,
             Z=Z, a=a, beta=beta, kappa_T=kappa_T, mu_JT=mu_JT,
+            accuracy=self.molecule.transport_accuracy,
             rho=rho, gamma=gamma, cv_s=cv_s, cp_s=cp_s,
         )
 
