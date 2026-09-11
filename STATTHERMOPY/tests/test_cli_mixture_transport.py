@@ -114,11 +114,12 @@ class TestOneShotMixtureTransport:
         assert "D(N2,O2)" in out
 
 
-class TestTraceAmountsAreNotZero:
-    """``composition (mole)`` prints four decimals, so a ppm species shows as ``0.0000``.
+class TestFractionFormatting:
+    """A ppm species must never echo as ``0.0000``: users read that as their input dropped.
 
-    Help.html documents the per-species table as the authority on who is in the mixture; these
-    pin that distinction, which is otherwise invisible in the header.
+    Four decimals erase anything under 5e-05, so ``H2S:0.000045`` came back as ``H2S=0.0000``
+    beside a full row of computed transport data. ``_fmt_x`` switches to scientific notation
+    exactly where the fixed form would erase a species, and nowhere else.
     """
 
     BIOGAS = ["CH4:0.557", "CO2:0.439", "O2:0.004", "H2S:0.000045", "CO:0.000009"]
@@ -129,14 +130,68 @@ class TestTraceAmountsAreNotZero:
 
     @staticmethod
     def _row(body, name):
-        return re.search(rf"^\s+{name}\s+\d", body, re.M) is not None
+        return re.search(rf"^\s+{name}\s+[\d.]", body, re.M) is not None
 
-    def test_a_species_rounded_to_zero_is_still_computed(self, capsys):
-        out = _run(capsys, ["transport", "--mixture", *self.BIOGAS, "--T", "300"])
-        assert "H2S=0.0000" in out and "CO=0.0000" in out
-        body = self._contributions(out)
+    @pytest.mark.parametrize(
+        "x,expected",
+        [
+            (0.5570, "0.5570"),      # ordinary fractions keep four decimals
+            (0.0040, "0.0040"),
+            (0.0004, "0.0004"),      # dry air's CO2: legible, so left alone
+            (5.0e-05, "0.0001"),     # last value the fixed form still shows
+            (4.9e-05, "4.90e-05"),   # first value it would erase
+            (4.5e-05, "4.50e-05"),
+            (9.0e-06, "9.00e-06"),
+            (1.0e-12, "1.00e-12"),
+            (0.0, "0.0000"),         # a real zero may print as zero
+        ],
+    )
+    def test_formatter_switches_exactly_at_the_erasure_boundary(self, x, expected):
+        from statthermopy.cli.app import _fmt_x
+
+        assert _fmt_x(x) == expected
+
+    def test_ppm_species_are_visible_in_every_composition_line(self, capsys):
+        for argv in (["transport", "--mixture", *self.BIOGAS, "--T", "300"],
+                     ["run", "--mixture", *self.BIOGAS, "--T", "300"]):
+            out = _run(capsys, argv)
+            assert "H2S=4.50e-05" in out and "CO=9.00e-06" in out
+            assert "=0.0000" not in out
+
+    def test_ppm_species_are_visible_in_the_contributions_table(self, capsys):
+        body = self._contributions(
+            _run(capsys, ["transport", "--mixture", *self.BIOGAS, "--T", "300"])
+        )
+        assert "4.50e-05" in body and "9.00e-06" in body
         assert self._row(body, "H2S")
         assert self._row(body, "CO")
+
+    def test_columns_stay_aligned(self, capsys):
+        """Scientific notation is narrower than the field, so the table must not shift."""
+        out = _run(capsys, ["transport", "--mixture", *self.BIOGAS, "--T", "300"])
+        rows = [ln for ln in self._contributions(out).splitlines()
+                if re.match(r"^\s+(CH4|CO2|O2|H2S|CO)\s", ln)]
+        assert len(rows) == 5
+        assert len({len(ln) for ln in rows}) == 1
+
+    def test_air_composition_is_left_alone(self, capsys):
+        """The fix must not churn compositions that were already legible."""
+        out = _run(capsys, ["run", "--fluid", "Air", "--T", "300"])
+        assert "CO2=0.0004" in out
+
+    def test_the_mixture_repr_does_not_erase_a_trace(self):
+        """``mixture ...`` echoes the repr, so it is the first place the erasure showed."""
+        from statthermopy.mixture import IdealGasMixture
+
+        text = repr(IdealGasMixture.from_names({"CH4": 0.999955, "H2S": 0.000045}))
+        assert "H2S=4.5e-05" in text
+        assert "0.0000" not in text
+
+    def test_the_shell_echo_shows_ppm_components(self, capsys):
+        sh = _shell()
+        sh.onecmd("mixture " + " ".join(self.BIOGAS))
+        out = capsys.readouterr().out
+        assert "H2S=4.49976e-05" in out and "CO=8.99951e-06" in out
 
     def test_a_true_zero_is_dropped_from_the_table(self, capsys):
         spec = [s if not s.startswith("H2S") else "H2S:0" for s in self.BIOGAS]

@@ -231,5 +231,8 @@ class IdealGasMixture:
     properties = compute
 
     def __repr__(self) -> str:
-        comp = ", ".join(f"{mol.name}={x:.4f}" for mol, x in self.x.items())
+        # ``%g``, not four decimals: a repr must not round a component to ``0.0000`` and so
+        # claim a species is absent when it is a real part of the mixture. It also shows the
+        # normalised fraction to full working precision, which four decimals hide.
+        comp = ", ".join(f"{mol.name}={x:g}" for mol, x in self.x.items())
         return f"IdealGasMixture({comp})"

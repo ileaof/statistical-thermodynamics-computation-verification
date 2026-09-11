@@ -1450,8 +1450,8 @@ subcomandos que você vai usar juntos na prática: <code>transport</code> e
 
 <div class="output">
   <div class="outhead">saída</div>
-<pre>  Mixture transport — CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=0.0000, CO=0.0000 @ T=300.0000 K, P=101325 Pa
-    composition (mole): CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=0.0000, CO=0.0000
+<pre>  Mixture transport — CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=4.50e-05, CO=9.00e-06 @ T=300.0000 K, P=101325 Pa
+    composition (mole): CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=4.50e-05, CO=9.00e-06
     mixing rules: mu=Wilke, k=Mason-Saxena, D_im=Blanc
     Dynamic viscosity              =    1.33454e-05  Pa·s
     Kinematic viscosity            =    1.15743e-05  m^2/s
@@ -1470,22 +1470,22 @@ subcomandos que você vai usar juntos na prática: <code>transport</code> e
     CH4       0.5570    1.0495e-05  3.2744e-02    1.6423e-05    0.7047    5.1720e-06  1.1592e-02
     CO2       0.4390    1.5186e-05  1.7565e-02    1.6380e-05    0.7066    8.1009e-06  1.1135e-02
     O2        0.0040    2.0569e-05  2.6427e-02    1.8345e-05    0.6309    7.1714e-08  1.0622e-04
-    H2S       0.0000    1.2889e-05  1.6862e-02    1.4352e-05    0.8065    6.6611e-10  9.8106e-07
-    CO        0.0000    1.7684e-05  2.5329e-02    1.8282e-05    0.6331    1.4030e-10  2.1890e-07</pre>
+    H2S     4.50e-05    1.2889e-05  1.6862e-02    1.4352e-05    0.8065    6.6611e-10  9.8106e-07
+    CO      9.00e-06    1.7684e-05  2.5329e-02    1.8282e-05    0.6331    1.4030e-10  2.1890e-07</pre>
 </div>
 
 <div class="callout warn">
-  <span class="label">Um <code>0.0000</code> impresso não quer dizer espécie ausente</span>
-  H<sub>2</sub>S (4,5 × 10⁻⁵) e CO (9 × 10⁻⁶) aparecem como
-  <code>0.0000</code> no cabeçalho e na linha <code>composition (mole)</code> simplesmente
-  porque esses campos são impressos com quatro casas decimais. As duas espécies
-  <em>estão</em> na conta, com as frações que você digitou: a tabela de
-  contribuições mostra o μ<sub><em>i</em></sub>, o
-  <em>k</em><sub><em>i</em></sub> e o D<sub><em>im</em></sub> de cada uma.
-  <p style="margin:.7rem 0 0;">Como distinguir de um zero de verdade: uma espécie com
-  fração exatamente nula é removida da mistura e <strong>desaparece da tabela de
-  contribuições</strong>. Rodando o mesmo caso com <code>H2S:0</code>, sobram quatro
-  linhas:</p>
+  <span class="label">Espécies em ppm aparecem em notação científica, não como zero</span>
+  H<sub>2</sub>S e CO saem como <code>H2S=4.50e-05</code> e <code>CO=9.00e-06</code>, e não
+  como <code>0.0000</code>. A distinção é deliberada: quatro casas decimais
+  apagariam qualquer fração abaixo de 5 × 10⁻⁵, e uma composição que ecoa
+  <code>0.0000</code> se lê como &ldquo;o programa descartou o que eu digitei&rdquo;. O CLI
+  troca de formato exatamente quando a forma decimal apagaria a espécie &mdash; e só aí:
+  o ar seco continua exibindo <code>CO2=0.0004</code>.
+  <p style="margin:.7rem 0 0;">Um <code>0.0000</code>, portanto, agora significa zero de
+  verdade. E um zero de verdade é mais do que um valor pequeno: a espécie é removida da
+  mistura e <strong>desaparece da tabela de contribuições</strong>. Rodando o mesmo caso
+  com <code>H2S:0</code>, sobram quatro linhas:</p>
   <div class="output" style="margin:.7rem 0 0;">
     <div class="outhead">saída de <code>... O2:0.004 H2S:0 CO:0.000009 ...</code> (final)</div>
 <pre>  --- Per-species contributions ---
@@ -1493,11 +1493,14 @@ subcomandos que você vai usar juntos na prática: <code>transport</code> e
     CH4       0.5570    1.0495e-05  3.2744e-02    1.6423e-05    0.7048    5.1723e-06  1.1592e-02
     CO2       0.4390    1.5186e-05  1.7565e-02    1.6380e-05    0.7066    8.1013e-06  1.1136e-02
     O2        0.0040    2.0569e-05  2.6427e-02    1.8345e-05    0.6309    7.1718e-08  1.0622e-04
-    CO        0.0000    1.7684e-05  2.5329e-02    1.8282e-05    0.6331    1.4031e-10  2.1891e-07</pre>
+    CO      9.00e-06    1.7684e-05  2.5329e-02    1.8282e-05    0.6331    1.4031e-10  2.1891e-07</pre>
   </div>
-  A linha do H<sub>2</sub>S sumiu &mdash; e o CO, que continua em 9 ppm, segue listado com
-  <code>0.0000</code>. <strong>A tabela de contribuições é a fonte
-  autoritária de quem está na mistura</strong>, não a linha de composição.
+  A linha do H<sub>2</sub>S sumiu; a do CO permanece, com os 9 ppm à vista. As duas
+  situações &mdash; presente em traço e ausente &mdash; agora se distinguem à primeira
+  vista, tanto na linha de composição quanto na tabela.
+  <p style="margin:.7rem 0 0;">A exportação nunca teve esse problema: <code>--export</code>
+  grava a fração com precisão total (<code>4.499757013121292e-05</code>), qualquer que
+  seja a forma exibida no terminal.</p>
 </div>
 
 <h5>O balanço fecha, e o programa confirma o que usou</h5>
@@ -1640,7 +1643,7 @@ concentração o H<sub>2</sub>S realmente não compromete o <em>k</em> da mistur
   </div>
   <div class="output" style="margin:.7rem 0 0;">
     <div class="outhead">saída (linhas selecionadas)</div>
-<pre>  Mixture transport — CH4=0.5231, CO2=0.4225, O2=0.0040, H2S=0.0503, CO=0.0000 @ T=300.0000 K, P=101325 Pa
+<pre>  Mixture transport — CH4=0.5231, CO2=0.4225, O2=0.0040, H2S=0.0503, CO=9.05e-06 @ T=300.0000 K, P=101325 Pa
     Dynamic viscosity              =    1.33495e-05  Pa·s
     Thermal conductivity           =      0.0223554  W/m/K
     validated accuracy: viscosity ±3.9%, conductivity ±5.7%, diffusion ±6.6%</pre>
@@ -1665,7 +1668,7 @@ estado; <code>transport</code> dá μ, <em>k</em> e os adimensionais.</p>
 
 <div class="output">
   <div class="outhead">saída</div>
-<pre>  Mixture (mole): CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=0.0000, CO=0.0000
+<pre>  Mixture (mole): CH4=0.5570, CO2=0.4390, O2=0.0040, H2S=4.50e-05, CO=9.00e-06
   T=300.0000 K  P=101325 Pa  M_avg=28.3841 g/mol  R_specific=292.9269 J/kg/K
   --- Molar (per mol) ---
     U_m      =    7300.752727  J/mol
@@ -1692,8 +1695,8 @@ estado; <code>transport</code> dá μ, <em>k</em> e os adimensionais.</p>
     CH4        0.5570     4230.73   106.547     -26344.05   19.888
     CO2        0.4390     3044.65    96.875     -24922.98   16.300
     O2         0.0040       24.98     1.004       -266.31    0.117
-    H2S        0.0000        0.34     0.013         -3.45    0.002
-    CO         0.0000        0.06     0.003         -0.72    0.000</pre>
+    H2S      4.50e-05        0.34     0.013         -3.45    0.002
+    CO       9.00e-06        0.06     0.003         -0.72    0.000</pre>
 </div>
 
 <h5>Como ler o quadro termodinâmico</h5>

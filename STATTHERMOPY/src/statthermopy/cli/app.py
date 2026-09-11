@@ -75,6 +75,21 @@ _UNITS = {
 # Air-transport properties accepted by `airtransport <prop> ...` and shown in reports.
 _AIR_TRANSPORT_PROPS = ("mu", "nu", "k", "alpha", "D_eff", "Pr", "Sc", "Le")
 
+def _fmt_x(x: float, width: int = 0) -> str:
+    """Format a mole fraction so that a species present in the mixture never prints as zero.
+
+    Four decimals read best for ordinary compositions, but they turn any trace below 5e-05
+    into ``0.0000`` -- and a user who typed ``H2S:0.000045`` reads that as the input having
+    been dropped, not as rounding. So fall back to scientific notation exactly when the fixed
+    form would erase a species that is really there, and not a moment sooner: this leaves every
+    legible composition alone (dry air keeps ``CO2=0.0004``) and costs eight columns when it
+    does trigger. An exact zero still prints ``0.0000``, because there it is the truth.
+    """
+    s = f"{x:.4f}"
+    if x != 0.0 and float(s) == 0.0:
+        s = f"{x:.2e}"
+    return f"{s:>{width}}" if width else s
+
 
 def _parse_air_humidity(tokens: list[str]) -> tuple[dict, list[str]]:
     """Split CLI tokens into a humidity-spec dict and the remaining (non-humidity) tokens.
@@ -756,7 +771,7 @@ class StatThermoPyShell(Cmd):
         """
         from ..transport.air import AIR_TRANSPORT_LABELS, AIR_TRANSPORT_UNITS
 
-        composition = ", ".join(f"{k}={v:.4f}" for k, v in res.x.items())
+        composition = ", ".join(f"{k}={_fmt_x(v)}" for k, v in res.x.items())
         tag = res.label or composition
         w = res.humidity_ratio
         w_s = f", humidity ratio w={w:.4e} kg/kg" if w is not None else ""
@@ -809,7 +824,7 @@ class StatThermoPyShell(Cmd):
         for name, c in res.components.items():
             sc_i = res.Sc_i.get(name, 0.0)
             print(
-                f"    {name:6s}{c.x:10.4f}{c.mu_i:14.4e}{c.k_i:12.4e}{c.D_im:14.4e}"
+                f"    {name:6s}{_fmt_x(c.x, 10)}{c.mu_i:14.4e}{c.k_i:12.4e}{c.D_im:14.4e}"
                 f"{sc_i:10.4f}{c.mu_contrib:14.4e}{c.k_contrib:12.4e}"
             )
 
@@ -888,7 +903,7 @@ class StatThermoPyShell(Cmd):
 
     @staticmethod
     def _print_mixture(res) -> None:
-        comp = ", ".join(f"{k}={v:.4f}" for k, v in res.x.items())
+        comp = ", ".join(f"{k}={_fmt_x(v)}" for k, v in res.x.items())
         print(f"  Mixture ({res.basis}): {comp}")
         print(
             f"  T={res.T:.4f} K  P={res.P:.6g} Pa  M_avg={res.M_avg*1e3:.4f} g/mol  "
@@ -906,7 +921,7 @@ class StatThermoPyShell(Cmd):
             print(f"    {'species':8s}{'x_i':>9}{'U':>12}{'S':>10}{'G':>14}{'Cp':>9}")
             for name, c in res.components.items():
                 print(
-                    f"    {name:8s}{c.x:9.4f}{c.U_contrib:12.2f}{c.S_contrib:10.3f}"
+                    f"    {name:8s}{_fmt_x(c.x, 9)}{c.U_contrib:12.2f}{c.S_contrib:10.3f}"
                     f"{c.G_contrib:14.2f}{c.Cp_contrib:9.3f}"
                 )
 
