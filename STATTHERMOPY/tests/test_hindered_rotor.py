@@ -218,3 +218,84 @@ def test_numba_grid_falls_back_for_internal_rotors():
     finally:
         set_backend("numpy")
     assert got == pytest.approx(ref, rel=1e-10)
+
+
+# -- the T = 0 limit ----------------------------------------------------------
+
+class TestZeroKelvinLimit:
+    """Every other mode guards ``T == 0``; :class:`HinderedRotor` did not.
+
+    The GUI plots from Tmin = 0 K by default, so ``x = levels / T`` raised ZeroDivisionError
+    and the three species carrying an internal rotor -- C2H6, C3H8 and CH3CCL3 -- produced no
+    property graph at all, while every other species plotted normally.
+    """
+
+    ROTOR_SPECIES = ["C2H6", "C3H8", "CH3CCL3"]
+
+    @pytest.mark.parametrize("name", ROTOR_SPECIES)
+    def test_properties_at_absolute_zero_do_not_raise(self, name):
+        props = Thermodynamics(get(name), State(T=0.0, P=101325.0)).properties()
+        assert math.isfinite(props.Cp_m)
+        assert math.isfinite(props.Cv_m)
+        assert math.isfinite(props.U_m)
+
+    @pytest.mark.parametrize("name", ROTOR_SPECIES)
+    def test_the_rotor_freezes_out(self, name):
+        """Third Law: the torsional mode carries no energy and no heat capacity at T = 0."""
+        rotor = HinderedRotor(get(name).internal_rotors)
+        contribution = rotor.contribution(State(T=0.0, P=101325.0).resolve(get(name).molar_mass))
+        assert contribution.U_m == pytest.approx(0.0)
+        assert contribution.Cv_m == pytest.approx(0.0)
+        assert contribution.A_m == pytest.approx(0.0)
+        assert math.isfinite(contribution.ln_q)
+        assert math.isfinite(contribution.S_m)
+
+    @staticmethod
+    def _tunnelling_splitting(name: str) -> float:
+        """Energy (K) of the first level above the torsional ground state.
+
+        This sets the scale on which the T -> 0 limit is actually reached, and it varies by
+        five orders of magnitude across these three species because it depends exponentially
+        on the barrier: 7.9e-03 K for C2H6 (1024 cm^-1), 7.4e-06 K for C3H8 (1190 cm^-1) and
+        5.2e-08 K for CH3CCL3 (1913 cm^-1). A fixed approach temperature cannot serve all
+        three -- ethane's ln q is still -0.10 at 0.05 K.
+        """
+        rotor = get(name).internal_rotors[0]
+        levels = torsional_levels_kelvin(
+            rotor.rotation_constant_cm1, rotor.barrier_cm1, rotor.n_minima
+        )
+        return float(min(v for v in levels if v > 0.0))
+
+    @pytest.mark.parametrize("name", ROTOR_SPECIES)
+    def test_the_limit_is_continuous(self, name):
+        """Approaching 0 K must converge on the value returned exactly at 0 K."""
+        rotor = HinderedRotor(get(name).internal_rotors)
+        M = get(name).molar_mass
+        T_low = self._tunnelling_splitting(name) / 100.0
+        at_zero = rotor.contribution(State(T=0.0, P=101325.0).resolve(M))
+        near_zero = rotor.contribution(State(T=T_low, P=101325.0).resolve(M))
+        assert near_zero.Cv_m == pytest.approx(at_zero.Cv_m, abs=1e-6)
+        assert near_zero.U_m == pytest.approx(at_zero.U_m, abs=1e-6)
+        assert near_zero.ln_q == pytest.approx(at_zero.ln_q, abs=1e-6)
+
+    def test_the_limit_is_the_ground_state_degeneracy(self):
+        """ln q -> ln(g0 / sigma_int): ethane's ground level is a singlet under sigma = 3."""
+        rotor = HinderedRotor(get("C2H6").internal_rotors)
+        at_zero = rotor.contribution(State(T=0.0, P=101325.0).resolve(get("C2H6").molar_mass))
+        assert at_zero.ln_q == pytest.approx(-math.log(3.0))
+
+    @pytest.mark.parametrize("name", ROTOR_SPECIES)
+    def test_a_curve_from_zero_kelvin_is_plottable(self, name):
+        """The reported symptom: Cp vs T over the GUI's default range."""
+        Ts = [1500.0 * i / 99 for i in range(100)]   # the GUI's default range, starting at 0 K
+        _, values = Thermodynamics(
+            get(name), State(T=300.0, P=101325.0)
+        ).property_vs_T("Cp_m", Ts)
+        assert len(values) == len(Ts)
+        assert all(math.isfinite(v) for v in values)
+
+    def test_rotor_species_now_behave_like_the_rest(self):
+        """C2H6 was the outlier; at 0 K it must now be as finite as argon."""
+        for name in ["AR", "N2", *self.ROTOR_SPECIES]:
+            props = Thermodynamics(get(name), State(T=0.0, P=101325.0)).properties()
+            assert math.isfinite(props.Cp_m), name

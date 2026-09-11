@@ -124,6 +124,15 @@ class HinderedRotor(Mode):
         ``x_i = ε_i / (k_B T)`` are the dimensionless level energies; ``ln_q`` already carries the
         internal symmetry number ``-ln σ_int``.
         """
+        if T == 0.0:
+            # T -> 0: every level above the torsional ground state is depopulated, so the sum
+            # collapses to that level's degeneracy -- three near-degenerate states for a
+            # threefold barrier, split only by tunnelling. Both <x> and its variance vanish
+            # exponentially (x e^-x -> 0), which takes U_m and Cv_m to zero with them.
+            # Every other mode guards T = 0 the same way; this one did not, so plotting a
+            # species with an internal rotor from 0 K raised ZeroDivisionError.
+            ground = int(np.count_nonzero(levels == levels.min()))
+            return float(np.log(ground)) - float(np.log(symmetry)), 0.0, 0.0
         x = levels / T
         w = np.exp(-x)
         Z = float(w.sum())
@@ -144,6 +153,9 @@ class HinderedRotor(Mode):
     def d_ln_q_dT(self, state: ResolvedState) -> float:
         # d ln q / dT = <x> / T  (since U_m = R T <x> = R T² d ln q/dT).
         T = state.T
+        if T == 0.0:
+            # <x> vanishes exponentially, so <x>/T -> 0; return the limit rather than divide.
+            return 0.0
         total = 0.0
         for levels, sym, deg in self._levels:
             _, mean, _ = self._moments(levels, sym, T)
@@ -167,7 +179,7 @@ class HinderedRotor(Mode):
         for levels, sym, deg in self._levels:
             lq, mean, var = self._moments(levels, sym, T)
             ln_q += deg * lq
-            d_ln_q += deg * mean / T
+            d_ln_q += 0.0 if T == 0.0 else deg * mean / T
             U_m += deg * R * T * mean
             Cv_m += deg * R * var
             S_m += deg * R * (lq + mean)
