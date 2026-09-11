@@ -222,3 +222,79 @@ class TestAgreesWithTheApi:
         out = _run(capsys, ["transport", "--mixture", *spec, "--T", "300"])
         assert "Mixture transport" in out
         assert "Dynamic viscosity" in out
+
+
+class TestMixtureExportAndClearErrors:
+    """Paths a user reaches for that used to fail silently or say the wrong thing."""
+
+    @pytest.mark.parametrize("fmt,ext", [("csv", "csv"), ("json", "json"), ("yaml", "yaml"),
+                                          ("latex", "tex"), ("excel", "xlsx")])
+    def test_mixture_exports_in_every_format(self, capsys, tmp_path, fmt, ext):
+        """It used to write a file only for JSON, and say nothing for the rest."""
+        out_file = tmp_path / f"m.{ext}"
+        out = _run(capsys, ["run", "--mixture", "CO2:0.5", "CH4:0.5", "--T", "300",
+                            "--export", fmt, str(out_file)])
+        assert "exported ->" in out
+        assert out_file.exists() and out_file.stat().st_size > 0
+
+    def test_fluid_exports_too(self, capsys, tmp_path):
+        out_file = tmp_path / "air.csv"
+        out = _run(capsys, ["run", "--fluid", "Air", "--T", "300",
+                            "--export", "csv", str(out_file)])
+        assert "exported ->" in out and out_file.exists()
+
+    def test_unknown_format_is_reported_not_silently_coerced(self, capsys, tmp_path):
+        """A pure gas used to fall back to CSV; a mixture wrote nothing at all."""
+        for spec in (["--gas", "N2"], ["--mixture", "CO2:0.5", "CH4:0.5"]):
+            out = _run(capsys, ["run", *spec, "--T", "300",
+                                "--export", "bogus", str(tmp_path / "x.out")])
+            assert "unknown format" in out
+            assert not (tmp_path / "x.out").exists()
+
+    def test_shell_export_works_right_after_mixture_properties(self, capsys, tmp_path,
+                                                               monkeypatch):
+        """It used to claim nothing had been computed, immediately after printing it."""
+        monkeypatch.chdir(tmp_path)
+        sh = _shell()
+        sh.onecmd("mixture CO2:0.5 CH4:0.5")
+        sh.onecmd("T = 300")
+        sh.onecmd("P = 101325")
+        sh.onecmd("properties")
+        sh.onecmd("export csv m.csv")
+        out = capsys.readouterr().out
+        assert "exported ->" in out
+        assert (tmp_path / "m.csv").exists()
+
+    def test_shell_export_computes_a_mixture_on_the_fly(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        sh = _shell()
+        sh.onecmd("mixture CO2:0.5 CH4:0.5")
+        sh.onecmd("T = 300")
+        sh.onecmd("P = 101325")
+        sh.onecmd("export json m.json")
+        out = capsys.readouterr().out
+        assert "exported ->" in out
+
+    def test_plot_on_a_mixture_points_at_the_working_command(self, capsys):
+        sh = _shell()
+        sh.onecmd("mixture CO2:0.5 CH4:0.5")
+        sh.onecmd("T = 300")
+        sh.onecmd("plot Cp_m 300 600")
+        out = capsys.readouterr().out
+        assert "pure-gas properties" in out
+        assert "transport" in out and "gas CO2" in out
+
+    def test_modes_on_a_mixture_points_at_the_working_command(self, capsys):
+        sh = _shell()
+        sh.onecmd("mixture CO2:0.5 CH4:0.5")
+        sh.onecmd("T = 300")
+        sh.onecmd("modes")
+        out = capsys.readouterr().out
+        assert "partition function" in out
+        assert "properties" in out
+
+    def test_nothing_to_export_message_names_both_options(self, capsys):
+        sh = _shell()
+        sh.onecmd("export csv x.csv")
+        out = capsys.readouterr().out
+        assert "gas or mixture" in out

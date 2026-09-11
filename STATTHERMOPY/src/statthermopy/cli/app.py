@@ -267,7 +267,9 @@ class StatThermoPyShell(Cmd):
                 return
             res = self.mixture.compute(st)
             self._print_mixture(res)
-            self._last_result = None
+            # The exporter handles a mixture result in every format, so keep it: discarding it
+            # made `export` claim nothing had been computed right after `properties` printed.
+            self._last_result = res
             return
         if self.molecule is None:
             print("  error: select a gas first, e.g.  gas N2")
@@ -283,6 +285,11 @@ class StatThermoPyShell(Cmd):
 
     def do_modes(self, _arg: str) -> None:
         """Print the per-mode breakdown of the partition function and contributions."""
+        if self.molecule is None and self.mixture is not None:
+            print("  error: `modes` breaks down one molecule's partition function; a mixture is")
+            print("         selected. Use `properties` for the per-component breakdown, or pick")
+            print("         a component with:  gas CO2")
+            return
         if self.molecule is None or self.T is None:
             print("  error: select a gas and set T first.")
             return
@@ -309,6 +316,11 @@ class StatThermoPyShell(Cmd):
     def do_plot(self, arg: str) -> None:
         """Plot a property vs T (saved to PNG):  plot Cp_m 300 1500 [out.png]"""
         if self.molecule is None:
+            if self.mixture is not None:
+                print("  error: `plot` draws pure-gas properties; a mixture is selected.")
+                print("         For mixture transport vs T use:  transport <prop> Tmin Tmax")
+                print("         For a component, select it with:  gas CO2")
+                return
             print("  error: select a gas first.")
             return
         parts = _split(arg)
@@ -337,11 +349,18 @@ class StatThermoPyShell(Cmd):
             return
         fmt, path = parts[0], parts[1]
         if self._last_result is None:
-            # compute on the fly if a gas is selected
-            if self.molecule is None or self.T is None:
-                print("  error: nothing to export; run `properties` first.")
+            # compute on the fly if a gas or mixture is selected
+            if self.T is None or (self.molecule is None and self.mixture is None):
+                print("  error: nothing to export; select a gas or mixture and run `properties`.")
                 return
-            self._last_result = Thermodynamics(self.molecule, self._make_state()).compute()
+            st = self._make_state()
+            if st is None:
+                return
+            self._last_result = (
+                self.mixture.compute(st)
+                if self.mixture is not None
+                else Thermodynamics(self.molecule, st).compute()
+            )
         exp = Exporter(self._last_result)
         try:
             {
@@ -896,9 +915,7 @@ def _run_one_shot(args: argparse.Namespace) -> None:
         st = State(T=args.T, P=args.P)
         res = mix.compute(st)
         StatThermoPyShell._print_mixture(res)
-        if args.export:
-            fmt, path = args.export
-            Exporter(res).to_json(path) if fmt == "json" else None
+        _export(res, args.export)
         return
     if args.mixture:
         fractions: dict[str, float] = {}
@@ -909,19 +926,34 @@ def _run_one_shot(args: argparse.Namespace) -> None:
         st = State(T=args.T, P=args.P)
         res = mix.compute(st)
         StatThermoPyShell._print_mixture(res)
-        if args.export:
-            fmt, path = args.export
-            Exporter(res).to_json(path) if fmt == "json" else None
+        _export(res, args.export)
         return
     mol = get(args.gas)
     st = State(T=args.T, P=args.P, n=args.n)
     res = Thermodynamics(mol, st).compute()
     StatThermoPyShell._print_properties(res)
-    if args.export:
-        fmt, path = args.export
-        exp = Exporter(res)
-        getattr(exp, f"to_{fmt}", exp.to_csv)(path)
-        print(f"  exported -> {path}")
+    _export(res, args.export)
+
+
+def _export(res, spec) -> None:
+    """Write a result in the requested format, for a pure gas or a mixture alike.
+
+    An unknown format used to fall back to CSV for a pure gas and, for a mixture, to write
+    nothing at all without a word — a silent no-op that looked like success. Both now report.
+    """
+    if not spec:
+        return
+    fmt, path = spec
+    writer = getattr(Exporter(res), f"to_{fmt}", None)
+    if writer is None:
+        print(f"  error: unknown format {fmt!r}. Use csv|json|yaml|excel|latex.")
+        return
+    try:
+        writer(path)
+    except Exception as exc:  # noqa: BLE001 - surface the reason rather than failing mutely
+        print(f"  error: could not write {path}: {exc}")
+        return
+    print(f"  exported -> {path}")
 
 
 def _run_transport(args: argparse.Namespace) -> None:

@@ -2301,18 +2301,20 @@ para inserir a tabela diretamente em um manuscrito.</p>
 &gt; export latex n2.tex</code></pre>
 </div>
 
-<div class="callout warn">
-  <span class="label">Misturas e fluidos: exportação apenas em JSON</span>
-  Na execução direta com <code>--mixture</code> ou <code>--fluid</code>, apenas
-  <code>--export json &lt;arquivo&gt;</code> grava um arquivo; as demais palavras-chave são aceitas
-  sem produzir saída. O comando <code>export</code> do terminal interativo também opera somente
-  sobre resultados de gás puro. Para exportar misturas em outros formatos, use a classe
-  <code>Exporter</code> pela API Python.
-</div>
+<p>Misturas e fluidos predefinidos exportam nos <strong>mesmos cinco formatos</strong>, tanto na
+execução direta quanto pelo <code>export</code> do terminal interativo:</p>
 
 <div class="codeblock">
   <div class="codehead"><span class="codelang">bash</span><button class="copy-btn" type="button">Copiar</button></div>
-<pre><code>statthermopy run --fluid Air --T 300 --P 101325 --export json air.json</code></pre>
+<pre><code>statthermopy run --fluid Air --T 300 --P 101325 --export csv air.csv
+statthermopy run --mixture CO2:0.5 CH4:0.5 --T 300 --export latex co2ch4.tex</code></pre>
+</div>
+
+<div class="callout note">
+  <span class="label">Formato desconhecido avisa, não falha calado</span>
+  Uma palavra-chave inválida responde
+  <code>error: unknown format 'x'. Use csv|json|yaml|excel|latex.</code> — antes, num gás puro ela
+  caía silenciosamente para CSV e, numa mistura, não gravava nada sem dizer.
 </div>
 
 <h3>12.2 Exportação do módulo de transporte do ar</h3>
@@ -3066,6 +3068,90 @@ veredito PASS/FAIL e um gráfico do motor sobreposto à referência (Figura 4).<
 <!-- --------------------------------------------------- 14. SOLUÇÃO DE PROBLEMAS -->
 <h2 id="problemas">14. Solução de problemas</h2>
 
+<h3>14.1 O que o programa não faz</h3>
+
+<p>Antes da tabela de sintomas, vale saber onde <em>não</em> insistir. Nada abaixo é defeito: são
+limites conhecidos, e cada linha diz o caminho que funciona.</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Limites conhecidos e o que usar no lugar.</caption>
+    <thead><tr><th>Não existe</th><th>Por quê</th><th>Faça assim</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>plot</code> de propriedade termodinâmica de mistura</td>
+        <td>O traçador de curvas opera sobre uma molécula.</td>
+        <td><code>transport &lt;prop&gt; Tmin Tmax</code> para transporte da mistura; ou selecione um componente.</td>
+      </tr>
+      <tr>
+        <td><code>modes</code> de mistura</td>
+        <td>A desagregação por modo é de uma função de partição só.</td>
+        <td><code>properties</code> já traz a desagregação por componente.</td>
+      </tr>
+      <tr>
+        <td><code>transport --export</code></td>
+        <td>Só <code>airtransport</code> tem exportador próprio.</td>
+        <td><code>airtransport --export</code> para o ar; a API para outras composições.</td>
+      </tr>
+      <tr>
+        <td><code>Sc</code>, <code>Le</code>, <code>D_eff</code> escalares numa mistura genérica</td>
+        <td>Difusão é grandeza <em>por espécie</em>; sem traçador nomeado não há um valor único.</td>
+        <td>Leia a coluna <code>Sc_i</code>, ou nomeie com <code>--trace</code>.</td>
+      </tr>
+      <tr>
+        <td>Fluidos predefinidos além de <strong>Air</strong></td>
+        <td>Só o ar está no registro.</td>
+        <td>Monte a composição com <code>--mixture</code>.</td>
+      </tr>
+      <tr>
+        <td>Gás real, alta pressão, condensação</td>
+        <td>O motor é de gás ideal e transporte diluído.</td>
+        <td>Veja a Seção <a href="#transporte">8</a>: perto da saturação a não idealidade domina.</td>
+      </tr>
+      <tr>
+        <td>Equilíbrio químico</td>
+        <td>Apenas a arquitetura existe; não há solucionador.</td>
+        <td>μ<sub>i</sub>(T,P) está disponível para construir um por fora.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>14.2 Onde os resultados têm mais incerteza</h3>
+
+<p>Os coeficientes de transporte não têm todos a mesma qualidade, e o programa <strong>declara
+isso</strong>: cada relatório traz a linha <code>validated accuracy</code>, e o campo
+<code>accuracy</code> está disponível na API. Antes de usar um número, olhe a banda.</p>
+
+<div class="table-wrap">
+  <table>
+    <caption>Bandas medidas a 300 K. A causa de cada resíduo está em
+    <code>docs/TRANSPORT_CORRECTION_REPORT.md</code>.</caption>
+    <thead><tr><th>Grandeza</th><th>Banda típica</th><th>Pior caso</th><th>Causa do resíduo</th></tr></thead>
+    <tbody>
+      <tr><td>μ, não polares</td><td class="num">≈ 1 %</td><td class="num">CH₄ 6,3 %</td><td>—</td></tr>
+      <tr><td>μ, polares</td><td class="num">≈ 2 %</td><td class="num">H₂O 2,3 %</td><td>Stockmayer já aplicado ao H₂O</td></tr>
+      <tr><td><em>k</em>, não polares</td><td class="num">≈ 4 %</td><td class="num">CO₂ 5,8 %</td><td>Eucken / Mason–Monchick</td></tr>
+      <tr><td><strong><em>k</em>, polares</strong></td><td class="num"><strong>12–25 %</strong></td><td class="num"><strong>H₂O 25 %</strong></td><td>Troca ressonante dipolar; nenhum modelo disponível alcança</td></tr>
+      <tr><td>D binária, não polares</td><td class="num">≈ 5 % (baixo)</td><td class="num">N₂–O₂ 10 %</td><td>σ/ε derivados de viscosidade</td></tr>
+      <tr><td><strong>D binária, com polar</strong></td><td class="num"><strong>≈ 16 % (baixo)</strong></td><td class="num"><strong>H₂O–O₂ 23 %</strong></td><td>idem, agravado pela polaridade</td></tr>
+      <tr><td>C<sub>p</sub>, C<sub>v</sub>, S, ρ, γ, <em>a</em></td><td class="num">&lt; 1 %</td><td class="num">—</td><td>vêm da função de partição</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout warn">
+  <span class="label">Dois números para não usar sem pensar</span>
+  <p style="margin:.4rem 0;"><strong><em>k</em> do vapor d'água</strong> tem erro de +25 %, e
+  <strong>D(H₂O–ar)</strong> de −17 %. São justamente as grandezas que governam o termo de energia
+  e o de espécies num escoamento úmido. Ambas as causas estão provadas e documentadas, mas a
+  correção exige física que o modelo atual não tem.</p>
+  <p style="margin:.4rem 0 0;">As grandezas termodinâmicas — C<sub>p</sub>, entropia, densidade,
+  velocidade do som — não compartilham esse problema: ficam abaixo de 1 %.</p>
+</div>
+
+<h3>14.3 Sintomas e causas</h3>
+
 <div class="table-wrap">
   <table>
     <caption>Sintomas frequentes, causas prováveis e como resolver.</caption>
@@ -3087,14 +3173,34 @@ veredito PASS/FAIL e um gráfico do motor sobreposto à referência (Figura 4).<
         <td>Confira a grafia com <code>list</code>. O banco tem 30 espécies e os nomes não distinguem maiúsculas.</td>
       </tr>
       <tr>
-        <td><code>error: nothing to export; run `properties` first.</code></td>
-        <td>Tentativa de exportar sem resultado calculado, ou resultado de mistura.</td>
-        <td>Rode <code>properties</code> antes de <code>export</code>. Misturas e fluidos exportam apenas por <code>run --export json</code> ou pela API.</td>
+        <td><code>error: nothing to export; select a gas or mixture and run `properties`.</code></td>
+        <td>Nenhum resultado calculado ainda.</td>
+        <td>Selecione a espécie ou a mistura, defina <code>T</code>, rode <code>properties</code>, depois <code>export</code>.</td>
       </tr>
       <tr>
-        <td><code>--export csv</code> não gera arquivo com <code>--fluid</code> ou <code>--mixture</code></td>
-        <td>Nesse caminho, apenas o formato JSON é gravado.</td>
-        <td>Use <code>--export json &lt;arquivo&gt;</code>, ou a classe <code>Exporter</code> pela API Python.</td>
+        <td><code>error: unknown format 'x'. Use csv|json|yaml|excel|latex.</code></td>
+        <td>Palavra-chave de formato inválida.</td>
+        <td>Use uma das cinco. O formato vem da palavra-chave, não da extensão do arquivo.</td>
+      </tr>
+      <tr>
+        <td><code>error: `plot` draws pure-gas properties; a mixture is selected.</code></td>
+        <td><code>plot</code> traça propriedades de uma molécula; a mistura não é suportada ali.</td>
+        <td>Para transporte de mistura vs <em>T</em>, use <code>transport &lt;prop&gt; Tmin Tmax</code>. Para um componente, <code>gas CO2</code>.</td>
+      </tr>
+      <tr>
+        <td><code>error: `modes` breaks down one molecule's partition function…</code></td>
+        <td><code>modes</code> desagrega a função de partição de uma molécula só.</td>
+        <td>Use <code>properties</code> para a desagregação por componente, ou selecione um deles.</td>
+      </tr>
+      <tr>
+        <td><code>error: 'Sc' is unavailable.</code> numa mistura</td>
+        <td>Sc, Le e D_eff são grandezas de uma espécie, e a mistura genérica não assume traçador.</td>
+        <td>Nomeie a espécie: <code>--trace H2O</code>, ou leia a coluna <code>Sc_i</code> por componente.</td>
+      </tr>
+      <tr>
+        <td><code>transport: error: unrecognized arguments: --export</code></td>
+        <td><code>transport</code> não tem exportação própria.</td>
+        <td>Use <code>airtransport --export</code> para o ar, ou <code>MixtureTransportCalculator</code> pela API para outras composições.</td>
       </tr>
       <tr>
         <td><code>ModuleNotFoundError: No module named 'PySide6'</code></td>
