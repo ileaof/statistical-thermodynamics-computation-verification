@@ -41,11 +41,15 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - GUI event 
     from PySide6.QtWidgets import QApplication
 
     from .mainwindow import StatThermoPyWindow
+    from .resources import APP_ICON, icon as bundled_icon
     from .theme import default_font
 
     args = list(argv) if argv is not None else sys.argv
     app = QApplication.instance() or QApplication(args)
     app.setFont(default_font())
+    # Set it on the application too, not only the window: this is what the taskbar,
+    # the alt-tab switcher and any secondary dialog pick up.
+    app.setWindowIcon(bundled_icon(APP_ICON))
     win = StatThermoPyWindow()
     win.show()
     return app.exec()

@@ -130,6 +130,13 @@ def qss(p: Palette) -> str:
     }}
     QLabel {{ background: transparent; color: {p.text}; }}
     QLabel[role="hint"] {{ color: {p.text_muted}; font-size: 9pt; }}
+    /* Typographic identity for the About dialog -- the project ships no logo asset, so the
+       name carries the brand at display size. */
+    QLabel[role="aboutTitle"] {{ color: {p.accent}; font-size: 26pt; font-weight: 600; }}
+    QLabel[role="aboutTagline"] {{ color: {p.text_muted}; font-size: 12pt; }}
+    QLabel[role="aboutAuthor"] {{ color: {p.text}; font-size: 11pt; font-weight: 600; }}
+    QLabel[role="sectionTitle"] {{ color: {p.accent}; font-weight: 600; }}
+    QFrame[role="rule"] {{ border: none; border-top: 1px solid {p.border}; max-height: 1px; }}
     QLabel[verdict="idle"] {{
         background-color: {p.surface_alt};
         color: {p.text_muted};

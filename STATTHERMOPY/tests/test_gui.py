@@ -805,3 +805,438 @@ def test_transport_export_writes_files(win, tmp_path, monkeypatch):
     win.transport_dat_btn.click()
     assert dat_target.exists()
     assert "VARIABLES" in dat_target.read_text(encoding="utf-8")
+
+
+# -- application chrome: identity, menus, status bar --------------------------
+
+class TestIdentityAndAbout:
+    """Help -> About must carry the real identity, and a real version or none at all."""
+
+    def test_about_text_carries_the_identity(self):
+        from statthermopy.gui.about import about_text
+
+        text = about_text()
+        assert "StatThermoPy" in text
+        assert "Statistical Thermodynamics in Python" in text
+        assert "Prof. Ivaldo Leão Ferreira" in text
+        assert "Faculty of Mechanical Engineering - FEM" in text
+        assert "Institute of Technology - ITEC" in text
+        assert "Federal University of Pará - UFPA" in text
+
+    def test_the_version_is_read_not_invented(self):
+        from importlib.metadata import version
+
+        from statthermopy.gui.about import about_text, package_version
+
+        found = package_version()
+        assert found == version("statthermopy")
+        assert f"Version {found}" in about_text()
+
+    def test_about_dialog_opens_and_closes(self, win):
+        from statthermopy.gui.about import AboutDialog
+
+        dialog = AboutDialog(win)
+        assert dialog.windowTitle() == "About StatThermoPy"
+        assert dialog.isModal()
+        dialog.close()
+
+    def test_window_title_names_the_product(self, win):
+        assert win.windowTitle() == "StatThermoPy — Statistical Thermodynamics in Python"
+
+
+class TestMenuBar:
+    """Reach menus through findChildren, not through ``menuBar().actions()[i].menu()``.
+
+    PySide6 does not keep the wrapper returned by ``addMenu`` bound to the underlying C++
+    object, so that navigation raises "Internal C++ object already deleted" as soon as it runs
+    inside a function scope where temporaries are collected promptly. The menus themselves are
+    alive and working -- findChildren finds them -- so this is a quirk of the binding, not a
+    defect in the window.
+    """
+
+    @staticmethod
+    def _menu(win, title):
+        from PySide6.QtWidgets import QMenu
+
+        for menu in win.findChildren(QMenu):
+            if menu.title() == title:
+                return menu
+        raise AssertionError(f"no menu titled {title!r}")
+
+    def test_the_four_menus_exist(self, win):
+        titles = [a.text() for a in win.menuBar().actions()]
+        assert titles == ["&File", "&Tools", "&View", "&Help"]
+
+    def test_export_moved_under_file(self, win):
+        """It used to be a top-level menu, which is not where anyone looks for it."""
+        labels = [a.text() for a in self._menu(win, "&File").actions() if a.text()]
+        assert "&Export results" in labels and "E&xit" in labels
+
+    def test_html_is_offered_as_an_export_format(self, win):
+        labels = [a.text() for a in self._menu(win, "&Export results").actions() if a.text()]
+        assert "HTML" in labels
+        assert {"CSV", "JSON", "YAML", "EXCEL", "LATEX"} <= set(labels)
+
+    def test_help_offers_about(self, win):
+        labels = [a.text() for a in self._menu(win, "&Help").actions() if a.text()]
+        assert "About StatThermoPy" in labels and "Documentation" in labels
+
+
+class TestStatusBar:
+    def test_it_starts_ready_and_reports_progress(self, win):
+        assert win.statusBar().currentMessage() == "Ready"
+        win.gas_combo.setCurrentText("N2")
+        win._on_compute()
+        assert win.statusBar().currentMessage() == "Calculation completed"
+
+    def test_the_state_summary_follows_the_inputs(self, win):
+        win.radio_pure.setChecked(True)
+        win.gas_combo.setCurrentText("CO2")
+        win.T_spin.setValue(500.0)
+        win.P_spin.setValue(2.0e5)
+        text = win._state_label.text()
+        assert "T = 500.00 K" in text and "P = 200000 Pa" in text and "CO2" in text
+
+    def test_choosing_volume_shows_volume_not_pressure(self, win):
+        win.use_V.setChecked(True)
+        assert "V =" in win._state_label.text()
+        win.use_P.setChecked(True)
+        assert "P =" in win._state_label.text()
+
+
+class TestInputValidation:
+    """A bad input must be named as a field and a rule, before the core is called."""
+
+    @pytest.mark.parametrize(
+        "setup,fragment",
+        [
+            (lambda w: (w.use_P.setChecked(True), w.P_spin.setValue(0.0)), "Pressure"),
+            (lambda w: (w.use_V.setChecked(True), w.V_spin.setValue(0.0)), "Volume"),
+            (lambda w: (w.use_n.setChecked(True), w.n_spin.setValue(0.0)), "Amount"),
+            (lambda w: (w.use_m.setChecked(True), w.m_spin.setValue(0.0)), "Mass"),
+        ],
+    )
+    def test_non_positive_state_values_are_caught(self, win, setup, fragment):
+        setup(win)
+        message = win._validate_state()
+        assert message is not None and fragment in message
+        win.use_P.setChecked(True)
+        win.P_spin.setValue(101325.0)
+        win.use_n.setChecked(True)
+        win.n_spin.setValue(1.0)
+
+    def test_an_empty_composition_is_caught(self, win):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        for row in range(win.mix_table.rowCount()):
+            win.mix_table.cellWidget(row, 1).setValue(0.0)
+        message = win._validate_composition()
+        assert message is not None and "Σx_i > 0" in message
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+
+    def test_a_valid_state_reports_no_problem(self, win):
+        win.T_spin.setValue(298.15)
+        win.P_spin.setValue(101325.0)
+        assert win._validate_state() is None
+
+
+class TestResultTables:
+    def test_every_table_is_named(self, win):
+        from PySide6.QtWidgets import QTableWidget
+
+        for table in win.findChildren(QTableWidget):
+            assert table.objectName(), "an unnamed table cannot be found by a test or stylesheet"
+
+    def test_result_tables_are_read_only_but_the_composition_is_not(self, win):
+        from PySide6.QtWidgets import QAbstractItemView
+
+        assert win.results_table.editTriggers() == QAbstractItemView.NoEditTriggers
+        assert win.mix_table.editTriggers() != QAbstractItemView.NoEditTriggers
+
+    def test_numbers_are_right_aligned_and_labels_are_not(self, win):
+        from PySide6.QtCore import Qt
+
+        win.gas_combo.setCurrentText("N2")
+        win._on_compute()
+        assert win.results_table.item(0, 1).textAlignment() & Qt.AlignRight
+        assert not (win.results_table.item(0, 0).textAlignment() & Qt.AlignRight)
+
+    def test_a_selection_can_be_copied_as_tsv(self, win, qapp):
+        from PySide6.QtWidgets import QTableWidgetSelectionRange
+
+        win.gas_combo.setCurrentText("N2")
+        win._on_compute()
+        win.results_table.setRangeSelected(QTableWidgetSelectionRange(0, 0, 0, 1), True)
+        win._copy_selection(win.results_table)
+        assert "\t" in qapp.clipboard().text()
+
+
+class TestSpeciesTransportIsNamed:
+    """Sc and Le mean nothing without the species they belong to."""
+
+    def test_the_contributions_table_carries_sc_and_le(self, win):
+        win._tabs.setCurrentIndex(5)
+        win._on_air_transport_compute()
+        headers = [
+            win.air_contrib_table.horizontalHeaderItem(c).text()
+            for c in range(win.air_contrib_table.columnCount())
+        ]
+        assert "Sc_i" in headers and "Le_i" in headers and "M [g/mol]" in headers
+
+    def test_the_scalar_sc_and_le_name_their_tracer(self, win):
+        win._tabs.setCurrentIndex(5)
+        win._on_air_transport_compute()
+        assert "Sc(H2O)" in win.air_status.text()
+        assert "Le(H2O)" in win.air_status.text()
+
+
+class TestSpeciesInfoPanel:
+    @pytest.mark.parametrize(
+        "name,fragment",
+        [
+            ("N2", "linear"),
+            ("H2O", "polar (Stockmayer)"),
+            ("C2H6", "1 hindered internal rotor"),
+            ("HE", "monoatomic"),
+        ],
+    )
+    def test_it_reports_what_the_database_holds(self, win, name, fragment):
+        win.gas_combo.setCurrentText(name)
+        assert fragment in win.species_info.text()
+
+    def test_it_quotes_the_molar_mass(self, win):
+        win.gas_combo.setCurrentText("N2")
+        assert "M = 28.0134 g/mol" in win.species_info.text()
+
+
+class TestMixtureEditing:
+    def test_normalize_makes_the_fractions_sum_to_one(self, win):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        while win.mix_table.rowCount() < 3:
+            win._add_mixture_row()
+        for row, x in enumerate([0.25, 0.15, 0.10]):
+            win.mix_table.cellWidget(row, 1).setValue(x)
+        win._on_normalize_mixture()
+        total = sum(
+            win.mix_table.cellWidget(r, 1).value() for r in range(win.mix_table.rowCount())
+        )
+        assert total == pytest.approx(1.0)
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+
+    def test_clear_leaves_one_blank_row(self, win):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        win._add_mixture_row()
+        win._on_clear_mixture()
+        assert win.mix_table.rowCount() == 1
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+
+
+class TestTheGuiReportsWhatTheCoreComputes:
+    """The physics must be untouched: the GUI displays the API numbers, not its own."""
+
+    @pytest.mark.parametrize("name", ["N2", "CO2", "H2O", "C2H6", "AR"])
+    def test_pure_species_values_match_the_api(self, win, name):
+        from statthermopy import State, Thermodynamics, get
+
+        win.radio_pure.setChecked(True)
+        win._on_mode_changed()
+        win.gas_combo.setCurrentText(name)
+        win.T_spin.setValue(400.0)
+        win.P_spin.setValue(101325.0)
+        win.use_P.setChecked(True)
+        win.use_n.setChecked(True)
+        win.n_spin.setValue(1.0)
+        win._on_compute()
+        reference = Thermodynamics(get(name), State(T=400.0, P=101325.0, n=1.0)).compute()
+        shown = {
+            win.results_table.item(r, 0).text().split()[0]: win.results_table.item(r, 1).text()
+            for r in range(win.results_table.rowCount())
+        }
+        for key in ("Cp_m", "S_m", "U_m"):
+            assert float(shown[key]) == pytest.approx(getattr(reference, key), rel=1e-5), key
+
+
+class TestBundledArtwork:
+    """The icon set ships inside the package, so it survives a pip install."""
+
+    def test_the_artwork_is_inside_the_package(self):
+        from statthermopy.gui.resources import ICON_DIR, available
+
+        assert ICON_DIR.is_dir()
+        assert "app" in available()
+        # It must live under the importable package, not beside the repository.
+        assert ICON_DIR.parts[-3:] == ("statthermopy", "gui", "icons")
+
+    def test_the_window_and_tabs_carry_icons(self, win):
+        from statthermopy.gui.resources import TAB_ICONS
+
+        assert not win.windowIcon().isNull()
+        for i in range(win._tabs.count()):
+            name = win._tabs.tabText(i)
+            if name in TAB_ICONS:
+                assert not win._tabs.tabIcon(i).isNull(), name
+
+    def test_every_tab_has_some_icon(self, win):
+        """Validate has no matching artwork and takes the theme's vector glyph instead."""
+        for i in range(win._tabs.count()):
+            assert not win._tabs.tabIcon(i).isNull(), win._tabs.tabText(i)
+
+    def test_a_missing_stem_degrades_quietly(self):
+        from statthermopy.gui.resources import icon
+
+        assert icon("no-such-artwork").isNull()
+
+
+class TestNumberDisplay:
+    """Six decimals of precision, without six decimals of noise on screen."""
+
+    @pytest.mark.parametrize(
+        "value,shown",
+        [(298.15, "298"), (101325.0, "101325"), (100.0, "100"), (1.0, "1")],
+    )
+    def test_trailing_zeros_are_dropped(self, win, value, shown):
+        win.P_spin.setValue(value)
+        text = win.P_spin.text()
+        point = win.P_spin.locale().decimalPoint()
+        # The integer part must survive intact -- a naive rstrip("0") would leave "1" here.
+        assert text.split(point)[0] == shown
+        assert not text.endswith("000000")
+        if point in text:
+            assert not text.endswith("0"), "a fractional part must not keep trailing zeros"
+
+    def test_precision_is_not_lost(self, win):
+        """The display is cosmetic: a ppm value round-trips through the widget intact."""
+        win.V_spin.setValue(4.5e-05)
+        assert win.V_spin.value() == pytest.approx(4.5e-05)
+        assert "000045" in win.V_spin.text()
+
+    def test_a_round_hundred_is_not_mangled(self, win):
+        """Naive rstrip("0") would turn 100,000000 into 1."""
+        win.P_spin.setValue(100.0)
+        assert win.P_spin.value() == pytest.approx(100.0)
+        assert win.P_spin.text().startswith("100")
+
+
+class TestMixtureTransportIsReachable:
+    """The GUI could reach a pure species and air, never an arbitrary mixture.
+
+    ``MixtureTransportCalculator`` was always generic in the number of components and the CLI
+    exposed it as ``transport --mixture``; the GUI had no route to it, so a user with a
+    five-component biogas had nowhere to compute its transport properties. The mixture now
+    sits at the head of the Transport tab's fluid list, where it inherits that tab's property
+    selection, sweep controls and canvas. The Air Transport tab stays dedicated to air.
+    """
+
+    BIOGAS = [("CH4", 0.557), ("CO2", 0.439), ("O2", 0.004),
+              ("H2S", 0.000045), ("CO", 0.000009)]
+
+    def _load_biogas(self, win, compute=True):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        while win.mix_table.rowCount() < len(self.BIOGAS):
+            win._add_mixture_row()
+        for row, (name, x) in enumerate(self.BIOGAS):
+            win.mix_table.cellWidget(row, 0).setCurrentText(name)
+            win.mix_table.cellWidget(row, 1).setValue(x)
+        win._tabs.setCurrentIndex(2)
+        win.transport_species.setCurrentIndex(0)
+        win._on_transport_source_changed()
+        win.transport_T.setValue(300.0)
+        win.transport_P.setValue(101325.0)
+        if compute:
+            win._on_transport_compute()
+
+    def test_the_mixture_heads_the_fluid_list(self, win):
+        assert win.transport_species.itemText(0) == win.MIXTURE_CHOICE
+        assert win._tabs.tabText(2) == "Transport"
+
+    def test_air_transport_stays_dedicated_to_air(self, win):
+        assert win._tabs.tabText(5) == "Air Transport"
+        assert not hasattr(win, "air_source")
+
+    def test_pure_species_are_untouched(self, win):
+        win._tabs.setCurrentIndex(2)
+        win.transport_species.setCurrentText("N2")
+        win.transport_T.setValue(300.0)
+        win._on_transport_compute()
+        assert "N2" in win.transport_status.text()
+
+    def test_it_matches_the_engine(self, win):
+        from statthermopy import State
+        from statthermopy.mixture import IdealGasMixture
+        from statthermopy.transport.air import MixtureTransportCalculator
+
+        self._load_biogas(win)
+        reference = MixtureTransportCalculator(
+            IdealGasMixture.from_names(dict(self.BIOGAS))
+        ).compute(State(T=300.0, P=101325.0))
+        shown = {
+            win.transport_table.item(r, 0).text(): win.transport_table.item(r, 1).text()
+            for r in range(win.transport_table.rowCount())
+        }
+        assert float(shown["mu"]) == pytest.approx(reference.mu, rel=1e-5)
+        assert float(shown["k"]) == pytest.approx(reference.k, rel=1e-5)
+        assert float(shown["Pr"]) == pytest.approx(reference.Pr, rel=1e-5)
+        assert float(shown["rho"]) == pytest.approx(reference.rho, rel=1e-5)
+
+    def test_the_composition_is_echoed(self, win):
+        self._load_biogas(win)
+        text = win.transport_status.text()
+        assert "CH4 0.5570" in text and "H2S 4.50e-05" in text
+
+    def test_pure_only_properties_are_disabled_for_a_mixture(self, win):
+        """D_self is self-diffusion of a gas in itself; a mixture reports D_eff instead."""
+        from PySide6.QtCore import Qt
+
+        self._load_biogas(win, compute=False)
+        disabled = {
+            win.transport_props.item(i).text()
+            for i in range(win.transport_props.count())
+            if not bool(win.transport_props.item(i).flags() & Qt.ItemIsEnabled)
+        }
+        assert disabled == {"D_self", "mu_JT"}
+        win.transport_species.setCurrentText("N2")
+        win._on_transport_source_changed()
+        still_disabled = [
+            win.transport_props.item(i).text()
+            for i in range(win.transport_props.count())
+            if not bool(win.transport_props.item(i).flags() & Qt.ItemIsEnabled)
+        ]
+        assert still_disabled == []
+
+    def test_the_plot_inherits_the_chosen_property(self, win):
+        self._load_biogas(win, compute=False)
+        for i in range(win.transport_props.count()):
+            win.transport_props.item(i).setSelected(
+                win.transport_props.item(i).text() == "mu"
+            )
+        win.transport_mode.setCurrentText("vs T")
+        win.transport_tmin.setValue(300.0)
+        win.transport_tmax.setValue(1000.0)
+        win._on_transport_plot()
+        lines = win.transport_canvas.ax.get_lines()
+        assert lines and len(lines[0].get_ydata()) > 1
+        assert "mu vs T" in win.transport_status.text()
+
+    def test_only_a_temperature_sweep_is_offered(self, win):
+        """The generic mixture sweep walks T; inventing the others would mean new physics."""
+        self._load_biogas(win, compute=False)
+        for i in range(win.transport_props.count()):
+            win.transport_props.item(i).setSelected(
+                win.transport_props.item(i).text() == "mu"
+            )
+        win.transport_mode.setCurrentText("vs P")
+        win._on_transport_plot()
+        assert "vs T" in win.statusBar().currentMessage()
+
+    def test_an_empty_composition_is_refused_politely(self, win):
+        win.radio_mix.setChecked(True)
+        win._on_mode_changed()
+        for row in range(win.mix_table.rowCount()):
+            win.mix_table.cellWidget(row, 1).setValue(0.0)
+        assert win._validate_composition_rows() is not None

@@ -528,3 +528,75 @@ class TestMoleFractionsAreNeverShownAsZero:
         title = plot_mixture_property(mix, "Cp_m", np.linspace(300.0, 1000.0, 10)).get_title()
         assert "Ar 0.0093" in title and "CO2 0.0004" in title
         assert "e-0" not in title  # nothing needed scientific notation here
+
+
+# -- HTML report --------------------------------------------------------------
+
+class TestHtmlExport:
+    """A standalone report: openable, printable and mailable on its own."""
+
+    def _report(self, tmp_path, result, table=None):
+        from statthermopy.io import Exporter
+
+        path = Exporter(result, table=table).to_html(tmp_path / "report.html")
+        return path, path.read_text(encoding="utf-8")
+
+    def test_it_writes_a_complete_document(self, tmp_path, n2_result):
+        path, text = self._report(tmp_path, n2_result)
+        assert path.exists() and path.suffix == ".html"
+        assert text.lstrip().startswith("<!doctype html>")
+        assert text.rstrip().endswith("</body>")
+
+    def test_it_is_self_contained(self, tmp_path, n2_result):
+        """No external stylesheet, font, image or script: it must render offline."""
+        _, text = self._report(tmp_path, n2_result)
+        assert "<script" not in text
+        assert "<link" not in text
+        assert "http://" not in text and "https://" not in text
+
+    def test_it_carries_the_identity(self, tmp_path, n2_result):
+        _, text = self._report(tmp_path, n2_result)
+        assert "StatThermoPy" in text
+        assert "Statistical Thermodynamics in Python" in text
+
+    def test_it_reports_state_and_properties(self, tmp_path, n2_result):
+        _, text = self._report(tmp_path, n2_result)
+        for section in ("<h2>State</h2>", "<h2>Properties</h2>", "<h2>All values</h2>"):
+            assert section in text
+        for label in ("Temperature", "Enthalpy", "Heat capacity (P)"):
+            assert label in text
+
+    def test_the_numbers_are_the_engine_numbers(self, tmp_path, n2_result):
+        _, text = self._report(tmp_path, n2_result)
+        assert f"{n2_result.Cp_m:.6g}" in text
+        assert f"{n2_result.S_m:.6g}" in text
+
+    def test_an_optional_table_is_appended(self, tmp_path, n2_result):
+        _, text = self._report(
+            tmp_path, n2_result, table={"T": [300.0, 400.0], "Cp_m": [29.1, 29.3]}
+        )
+        assert "<h2>Table</h2>" in text and "29.1" in text
+
+    def test_a_mixture_names_its_species(self, tmp_path):
+        from statthermopy import State
+        from statthermopy.mixture import IdealGasMixture
+
+        result = IdealGasMixture.from_names({"N2": 0.79, "O2": 0.21}).compute(
+            State(T=300.0, P=101325.0)
+        )
+        _, text = self._report(tmp_path, result)
+        assert "N2" in text and "O2" in text
+
+    def test_species_names_are_escaped_not_injected(self, tmp_path, n2_result):
+        """Keys and names are data; they must not be able to close a tag."""
+        from statthermopy.io.exporters import _esc
+
+        assert _esc("<b>x</b>") == "&lt;b&gt;x&lt;/b&gt;"
+
+    def test_the_cli_writes_html(self, tmp_path, capsys):
+        from statthermopy.cli.app import main
+
+        out_file = tmp_path / "n2.html"
+        assert main(["run", "--gas", "N2", "--T", "300", "--export", "html", str(out_file)]) == 0
+        assert "exported ->" in capsys.readouterr().out
+        assert out_file.exists() and out_file.stat().st_size > 0

@@ -346,10 +346,10 @@ class StatThermoPyShell(Cmd):
         print(f"  saved plot -> {out}")
 
     def do_export(self, arg: str) -> None:
-        """Export last result:  export csv out.csv   (csv|json|yaml|excel|latex)."""
+        """Export last result:  export csv out.csv   (html|csv|json|yaml|excel|latex)."""
         parts = _split(arg)
         if len(parts) < 2:
-            print("  usage: export <csv|json|yaml|excel|latex> <file>")
+            print("  usage: export <html|csv|json|yaml|excel|latex> <file>")
             return
         fmt, path = parts[0], parts[1]
         if self._last_result is None:
@@ -375,7 +375,7 @@ class StatThermoPyShell(Cmd):
                 "excel": exp.to_excel,
             }[fmt](path)
         except KeyError:
-            print(f"  error: unknown format {fmt!r}. Use csv|json|yaml|excel|latex.")
+            print(f"  error: unknown format {fmt!r}. Use html|csv|json|yaml|excel|latex.")
             return
         except Exception as exc:  # noqa: BLE001
             print(f"  error: {exc}")
@@ -955,7 +955,7 @@ def _export(res, spec) -> None:
     fmt, path = spec
     writer = getattr(Exporter(res), f"to_{fmt}", None)
     if writer is None:
-        print(f"  error: unknown format {fmt!r}. Use csv|json|yaml|excel|latex.")
+        print(f"  error: unknown format {fmt!r}. Use html|csv|json|yaml|excel|latex.")
         return
     try:
         writer(path)

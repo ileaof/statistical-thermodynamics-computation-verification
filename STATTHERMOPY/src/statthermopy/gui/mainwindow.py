@@ -13,10 +13,13 @@ install never affects the core import.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from pathlib import Path
+
 import numpy as np
 from matplotlib.figure import Figure
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -55,7 +58,7 @@ from ..fluids import available_fluids, get_fluid
 from ..humidair import COMPARISON_PROPERTIES, HumidAir
 from ..humidair import plots as humid_plots
 from ..io import Exporter
-from ..mixture import IdealGasMixture
+from ..mixture import IdealGasMixture, format_mole_fraction
 from ..plots import (
     MIXTURE_PROPS,
     MOLAR_PROPS,
@@ -67,6 +70,8 @@ from ..plots import (
 )
 from ..thermodynamics import Thermodynamics
 from ..validation import list_references, validate
+from .about import AFFILIATION_SHORT, APP_NAME, APP_TAGLINE, AboutDialog
+from .resources import APP_ICON, TAB_ICONS, icon as bundled_icon
 
 __all__ = ["StatThermoPyWindow"]
 
@@ -145,12 +150,28 @@ class _PlotCanvas(QWidget):
 
 
 class StatThermoPyWindow(QMainWindow):
-    """Main application window with Properties / Plot / Validate tabs."""
+    """Main application window.
+
+    Seven workspaces under a tab bar, a File/Tools/View/Help menu, and a status bar that
+    always shows the state the next calculation will use. The window owns no physics: it
+    collects inputs, validates them, calls the public API and presents what comes back.
+    """
+
+    #: Preferred opening size; clamped to the display by :meth:`_fit_to_screen`.
+    DEFAULT_SIZE = (1280, 820)
+
+    #: First entry of the Transport tab's fluid list: the composition from the Properties tab.
+    MIXTURE_CHOICE = "— Mixture (Properties tab) —"
+    #: Transport properties that exist for a pure species but have no mixture counterpart.
+    #: ``D_self`` is self-diffusion of one gas in itself; a mixture reports ``D_eff`` instead.
+    MIXTURE_UNAVAILABLE = frozenset({"D_self", "mu_JT"})
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("StatThermoPy — Statistical Thermodynamics")
-        self._fit_to_screen(1100, 760)
+        self.setWindowTitle(f"{APP_NAME} — {APP_TAGLINE}")
+        self.setWindowIcon(bundled_icon(APP_ICON))
+        self._fit_to_screen(*self.DEFAULT_SIZE)
+        self._default_splitter_sizes: dict = {}
 
         self._last_result = None  # last ThermoProperties / MixtureProperties (for export)
         self._theme_mode = "light"
@@ -166,10 +187,18 @@ class StatThermoPyWindow(QMainWindow):
         tabs.addTab(self._scrollable(self._build_comparisons_tab()), "Thermodynamic Comparisons")
         tabs.addTab(self._scrollable(self._build_air_transport_tab()), "Air Transport")
         tabs.addTab(self._scrollable(self._build_validate_tab()), "Validate")
+        for i in range(tabs.count()):
+            stem = TAB_ICONS.get(tabs.tabText(i))
+            if stem:
+                tabs.setTabIcon(i, bundled_icon(stem))
+        tabs.setIconSize(QSize(18, 18))
         self.setCentralWidget(tabs)
         self._tabs = tabs
 
+        self._install_table_behaviour()
+        self._refresh_species_info()
         self._build_menu()
+        self._build_status_bar()
 
         # sensible defaults
         self.T_spin.setValue(298.15)
@@ -231,6 +260,13 @@ class StatThermoPyWindow(QMainWindow):
             self.gas_combo.addItem(name)
         sel_lay.addWidget(QLabel("Species:"))
         sel_lay.addWidget(self.gas_combo)
+        # What the database actually knows about the selection. Previously the user picked a
+        # name from a list of thirty with nothing to tell them apart.
+        self.species_info = QLabel("")
+        self.species_info.setProperty("role", "hint")
+        self.species_info.setWordWrap(True)
+        self.gas_combo.currentTextChanged.connect(self._refresh_species_info)
+        sel_lay.addWidget(self.species_info)
 
         # mixture editor
         self.mix_table = QTableWidget(0, 2, self)
@@ -246,10 +282,16 @@ class StatThermoPyWindow(QMainWindow):
         mix_btns = QHBoxLayout()
         self.add_row_btn = QPushButton("Add row")
         self.del_row_btn = QPushButton("Remove row")
+        self.normalize_btn = QPushButton("Normalize")
+        self.clear_mix_btn = QPushButton("Clear")
         self.add_row_btn.clicked.connect(self._add_mixture_row)
         self.del_row_btn.clicked.connect(self._del_mixture_row)
+        self.normalize_btn.clicked.connect(self._on_normalize_mixture)
+        self.clear_mix_btn.clicked.connect(self._on_clear_mixture)
         mix_btns.addWidget(self.add_row_btn)
         mix_btns.addWidget(self.del_row_btn)
+        mix_btns.addWidget(self.normalize_btn)
+        mix_btns.addWidget(self.clear_mix_btn)
         mix_btns.addStretch()
         mix_btns.addWidget(self.basis_mole)
         mix_btns.addWidget(self.basis_mass)
@@ -433,10 +475,18 @@ class StatThermoPyWindow(QMainWindow):
         c1 = QHBoxLayout(card1)
         c1.setContentsMargins(10, 8, 10, 8)
         c1.setSpacing(8)
+        # A mixture sits beside the pure species rather than in a tab of its own: the
+        # property list, the sweep controls and the plot on this tab are all generic, so a
+        # mixture inherits every one of them instead of needing a parallel set. The Air
+        # Transport tab stays dedicated to air.
         self.transport_species = QComboBox()
+        self.transport_species.addItem(self.MIXTURE_CHOICE)
+        self.transport_species.insertSeparator(1)
         for name in list_molecules():
             self.transport_species.addItem(name)
-        c1.addWidget(QLabel("Species:"))
+        self.transport_species.setCurrentIndex(2)      # first real species
+        self.transport_species.currentIndexChanged.connect(self._on_transport_source_changed)
+        c1.addWidget(QLabel("Fluid:"))
         c1.addWidget(self.transport_species)
         self.transport_T = self._make_spin(0.0, 1.0e5, 300.0)
         self.transport_P = self._make_spin(0.0, 1.0e9, 101325.0)
@@ -710,7 +760,7 @@ class StatThermoPyWindow(QMainWindow):
         try:
             st = self._humid_model().state(T, P, **kwargs)
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Humid Air", f"Computation failed:\n{exc}")
+            self._fail("Humid Air: computation failed", exc)
             return
         self._populate_humidair(st)
 
@@ -768,7 +818,7 @@ class StatThermoPyWindow(QMainWindow):
         n = int(self.humid_npts.value())
         P = float(self.humid_P.value())
         if tmax <= tmin:
-            QMessageBox.warning(self, "Humid Air", "Tmax must exceed Tmin.")
+            self._warn("Humid Air", "Tmax must exceed Tmin.")
             return
         Ts = np.linspace(tmin, tmax, n)
         ha = self._humid_model()
@@ -919,7 +969,7 @@ class StatThermoPyWindow(QMainWindow):
         n = int(self.cmp_npts.value())
         P = float(self.cmp_P.value())
         if tmax <= tmin:
-            QMessageBox.warning(self, "Comparisons", "Tmax must exceed Tmin.")
+            self._warn("Comparisons", "Tmax must exceed Tmin.")
             return
         Ts = np.linspace(tmin, tmax, n)
         unit = "C" if self.cmp_xunit.currentIndex() == 1 else "K"
@@ -941,7 +991,7 @@ class StatThermoPyWindow(QMainWindow):
                 iso = self.cmp_isobaric.isChecked()
                 isoc = self.cmp_isochoric.isChecked()
                 if not (iso or isoc):
-                    QMessageBox.warning(self, "Comparisons", "Select Constant P and/or Constant V.")
+                    self._warn("Comparisons", "Select Constant P and/or Constant V.")
                     return
                 field = COMPARISON_PROPERTIES[self.cmp_prop.currentText()][0]
                 table, _ = humid_plots.plot_property_comparison(
@@ -949,7 +999,7 @@ class StatThermoPyWindow(QMainWindow):
                     isobaric=iso, isochoric=isoc, interactive=True, **kw
                 )
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Comparisons", f"Comparison failed:\n{exc}")
+            self._fail("Comparisons: comparison failed", exc)
             return
         self._cmp_table = table
         self.cmp_canvas.refresh()
@@ -963,11 +1013,11 @@ class StatThermoPyWindow(QMainWindow):
         try:
             self.cmp_canvas.figure.savefig(path, dpi=300, bbox_inches="tight")
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Comparisons", f"Export failed:\n{exc}")
+            self._fail("Comparisons: export failed", exc)
 
     def _on_comparison_export_data(self) -> None:
         if self._cmp_table is None:
-            QMessageBox.warning(self, "Comparisons", "Plot first, then export its data.")
+            self._warn("Comparisons", "Plot first, then export its data.")
             return
         path, _ = QFileDialog.getSaveFileName(
             self, "Export Data", "comparison", "CSV (*.csv);;Excel (*.xlsx)"
@@ -980,7 +1030,7 @@ class StatThermoPyWindow(QMainWindow):
             else:
                 self._cmp_table.to_csv(path)
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Comparisons", f"Export failed:\n{exc}")
+            self._fail("Comparisons: export failed", exc)
 
     # ================= Air Transport tab =======================================
     def _build_air_transport_tab(self) -> QWidget:
@@ -1051,11 +1101,13 @@ class StatThermoPyWindow(QMainWindow):
         self.air_contrib_box = QGroupBox("Per-species contributions")
         clay = QVBoxLayout(self.air_contrib_box)
         clay.setContentsMargins(8, 8, 8, 8)
-        self.air_contrib_table = QTableWidget(0, 7, self)
+        # Sc and Le are meaningless without the species they belong to, and the engine already
+        # carries both per component -- they were simply never shown.
+        self.air_contrib_table = QTableWidget(0, 10, self)
         self.air_contrib_table.setAlternatingRowColors(True)
         self.air_contrib_table.setHorizontalHeaderLabels(
-            ["Species", "x", "mu_i [Pa·s]", "k_i [W/m/K]", "D_im [m^2/s]",
-             "mu_contrib", "k_contrib"]
+            ["Species", "x_i", "M [g/mol]", "mu_i [Pa·s]", "k_i [W/m/K]",
+             "D_i,mix [m²/s]", "Sc_i", "Le_i", "mu contrib", "k contrib"]
         )
         self.air_contrib_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.air_contrib_table.verticalHeader().setVisible(False)
@@ -1153,6 +1205,146 @@ class StatThermoPyWindow(QMainWindow):
         return tab
 
     # -- Air Transport tab -----------------------------------------------------
+    # -- mixture transport, on the Transport tab -------------------------------
+    def _on_transport_source_changed(self) -> None:
+        """Mark the properties a mixture cannot report, and say which composition is in use."""
+        is_mixture = self.transport_species.currentText() == self.MIXTURE_CHOICE
+        for row in range(self.transport_props.count()):
+            item = self.transport_props.item(row)
+            unavailable = is_mixture and item.text() in self.MIXTURE_UNAVAILABLE
+            item.setFlags(
+                item.flags() & ~Qt.ItemIsEnabled if unavailable
+                else item.flags() | Qt.ItemIsEnabled
+            )
+            if unavailable:
+                item.setSelected(False)
+        if not is_mixture:
+            self.transport_status.setText("")
+            return
+        names = [
+            self.mix_table.cellWidget(r, 0).currentText()
+            for r in range(self.mix_table.rowCount())
+            if self.mix_table.cellWidget(r, 1) and self.mix_table.cellWidget(r, 1).value() > 0.0
+        ]
+        self.transport_status.setText(
+            "Mixture from the Properties tab: " + ", ".join(names) if names
+            else "Define a composition on the Properties tab, then Compute."
+        )
+
+    def _compute_mixture_transport(self, T: float, P: float) -> None:
+        """Point evaluation for the composition entered on the Properties tab."""
+        from ..transport.air import AIR_TRANSPORT_ALL_PROPS, AIR_TRANSPORT_UNITS
+
+        res = self._mixture_transport(T, P)
+        if res is None:
+            return
+        self._transport_last = res
+        rows = [(prop, getattr(res, prop, None)) for prop in AIR_TRANSPORT_ALL_PROPS]
+        rows = [(p, v) for p, v in rows if v is not None]
+        self.transport_table.setRowCount(len(rows))
+        for i, (prop, val) in enumerate(rows):
+            self.transport_table.setItem(i, 0, QTableWidgetItem(prop))
+            self.transport_table.setItem(i, 1, QTableWidgetItem(f"{val:.6g}"))
+            self.transport_table.setItem(i, 2, QTableWidgetItem(AIR_TRANSPORT_UNITS.get(prop, "")))
+        composition = ", ".join(
+            f"{name} {format_mole_fraction(c.x)}" for name, c in res.components.items()
+        )
+        self.transport_status.setText(
+            f"{composition} @ T={T:.2f} K, P={P:.4g} Pa — μ={res.mu:.4g} Pa·s, "
+            f"k={res.k:.4g} W/m·K, Pr={res.Pr:.3f}, a={res.a:.2f} m/s"
+        )
+        self.status("Calculation completed")
+
+    def _plot_mixture_transport(self, props: list[str]) -> None:
+        """Sweep the selected properties over T for the mixture, on this tab's canvas.
+
+        Only ``vs T`` is offered: the generic mixture sweep in
+        :func:`~statthermopy.transport.air.plots.plot_mixture_property` walks temperature, and
+        inventing a pressure sweep or a 2-D map here would mean reimplementing physics in the
+        GUI, which this layer does not do.
+        """
+        from ..transport.air import MixtureTransportCalculator
+        from ..transport.air import plots as ap
+
+        mode = self.transport_mode.currentText()
+        if mode != "vs T":
+            self._warn("Only vs T for a mixture",
+                       "A mixture sweep runs over temperature. Choose 'vs T', or pick a pure "
+                       "species for 'vs P' and the 2-D map.")
+            return
+        unavailable = sorted(set(props) & self.MIXTURE_UNAVAILABLE)
+        if unavailable:
+            self._warn("Not available for a mixture",
+                       f"{', '.join(unavailable)} is defined for a pure species only. "
+                       "Use D_eff for diffusion in a mixture.")
+            return
+        tmin, tmax = float(self.transport_tmin.value()), float(self.transport_tmax.value())
+        if tmin >= tmax:
+            self._warn("Check the sweep range", "Tmax must be greater than Tmin.")
+            return
+        problem = self._validate_composition_rows()
+        if problem:
+            self._warn("Check the composition", problem)
+            return
+        mix = self._build_mixture()
+        if mix is None:
+            self._warn("Check the composition",
+                       "Define a mixture on the Properties tab first.")
+            return
+        calc = MixtureTransportCalculator(mix)
+        Ts = np.linspace(tmin, tmax, int(self.transport_npts.value()))
+        P = float(self.transport_P.value())
+        ax = self.transport_canvas.ax
+        ax.clear()
+        try:
+            with self._busy("Plotting…"):
+                for prop in props:
+                    ap.plot_mixture_property(calc, prop, Ts, P=P, label=prop, ax=ax)
+        except Exception as exc:  # pragma: no cover - GUI error path
+            self._fail("Transport: plot failed", exc)
+            return
+        if len(props) > 1:
+            ax.set_ylabel(", ".join(props))
+            ax.legend()
+        self.transport_canvas.refresh()
+        self.transport_status.setText(
+            f"mixture: {', '.join(props)} vs T ({tmin:.0f}–{tmax:.0f} K, P={P:.4g} Pa)."
+        )
+        self.status("Plot generated")
+
+    def _mixture_transport(self, T: float, P: float):
+        """Transport properties of the composition entered on the Properties tab.
+
+        Same calculator the air path uses -- :class:`MixtureTransportCalculator` was always
+        generic in the number of components; only the GUI route to it was missing.
+        """
+        from ..transport.air import MixtureTransportCalculator
+
+        problem = self._validate_composition_rows()
+        if problem:
+            self._warn("Check the composition", problem)
+            return None
+        mix = self._build_mixture()
+        if mix is None:
+            self._warn("Check the composition",
+                       "Define a mixture on the Properties tab first.")
+            return None
+        return MixtureTransportCalculator(mix).compute(State(T=T, P=P))
+
+    def _validate_composition_rows(self) -> str | None:
+        """Composition check that does not depend on the Properties-tab mode radio."""
+        total = 0.0
+        for r in range(self.mix_table.rowCount()):
+            spin = self.mix_table.cellWidget(r, 1)
+            if spin is None:
+                continue
+            if spin.value() < 0.0:
+                return "Negative mole fractions are not allowed."
+            total += spin.value()
+        if total <= 0.0:
+            return "Mole fractions must satisfy Σx_i > 0: give at least one species a fraction."
+        return None
+
     def _air_model_obj(self):
         from ..transport.air import AirTransport
 
@@ -1181,11 +1373,11 @@ class StatThermoPyWindow(QMainWindow):
 
         T = float(self.air_T.value())
         P = float(self.air_P.value())
-        kw = self._air_humidity_kwargs()
         try:
-            res = self._air_model_obj().humid(T, P, **kw)
+            with self._busy("Calculating…"):
+                res = self._air_model_obj().humid(T, P, **self._air_humidity_kwargs())
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Air Transport", f"Computation failed:\n{exc}")
+            self._fail("Air Transport: computation failed", exc)
             return
         self._air_transport_last = res
 
@@ -1214,19 +1406,38 @@ class StatThermoPyWindow(QMainWindow):
         comps = list(res.components.values())
         self.air_contrib_table.setRowCount(len(comps))
         for i, c in enumerate(comps):
-            self.air_contrib_table.setItem(i, 0, QTableWidgetItem(c.name))
-            self.air_contrib_table.setItem(i, 1, QTableWidgetItem(_fmt(c.x)))
-            self.air_contrib_table.setItem(i, 2, QTableWidgetItem(f"{c.mu_i:.4e}"))
-            self.air_contrib_table.setItem(i, 3, QTableWidgetItem(f"{c.k_i:.4e}"))
-            self.air_contrib_table.setItem(i, 4, QTableWidgetItem(f"{c.D_im:.4e}"))
-            self.air_contrib_table.setItem(i, 5, QTableWidgetItem(f"{c.mu_contrib:.4e}"))
-            self.air_contrib_table.setItem(i, 6, QTableWidgetItem(f"{c.k_contrib:.4e}"))
+            cells = [
+                c.name,
+                format_mole_fraction(c.x),
+                f"{c.molar_mass * 1e3:.4f}",
+                f"{c.mu_i:.4e}",
+                f"{c.k_i:.4e}",
+                f"{c.D_im:.4e}",
+                # res.Sc_i / res.Le_i are the mixture-referenced numbers, nu_mix / D_i,mix --
+                # the ones that belong beside the D_i,mix column and that the CLI prints. The
+                # per-component c.Sc_i / c.Le_i are the *pure-species* values (nu_i / D_self_i),
+                # a different quantity: for CH4 in this biogas, 0.7616 instead of 0.7047.
+                f"{res.Sc_i[c.name]:.4f}",
+                f"{res.Le_i[c.name]:.4f}",
+                f"{c.mu_contrib:.4e}",
+                f"{c.k_contrib:.4e}",
+            ]
+            for col, text in enumerate(cells):
+                self.air_contrib_table.setItem(i, col, QTableWidgetItem(text))
 
         tag = res.label or ("humid air" if (res.humidity_ratio or 0) > 0 else "dry air")
-        self.air_status.setText(
-            f"{tag} @ T={T:.2f} K, P={P:.4g} Pa — mu={res.mu:.4g} Pa·s, k={res.k:.4g} W/m·K, "
-            f"Pr={res.Pr:.3f}, Sc={res.Sc:.3f}, Le={res.Le:.3f}, a={res.a:.2f} m/s."
-        )
+        parts = [
+            f"{tag} @ T={T:.2f} K, P={P:.4g} Pa",
+            f"mu={res.mu:.4g} Pa·s", f"k={res.k:.4g} W/m·K", f"Pr={res.Pr:.3f}",
+        ]
+        # Sc and Le belong to a named tracer diffusing through the mixture. An arbitrary
+        # mixture has no natural tracer, so the engine leaves them None and the per-species
+        # Sc_i / Le_i columns carry that information instead.
+        trace = getattr(res, "trace_species", None)
+        if trace and res.Sc is not None and res.Le is not None:
+            parts += [f"Sc({trace})={res.Sc:.3f}", f"Le({trace})={res.Le:.3f}"]
+        parts.append(f"a={res.a:.2f} m/s")
+        self.air_status.setText(" — ".join(parts[:1]) + " — " + ", ".join(parts[1:]) + ".")
 
     def _on_air_transport_plot(self) -> None:
         """Render the selected air-transport property vs T (dry / humid / comparison)."""
@@ -1240,7 +1451,7 @@ class StatThermoPyWindow(QMainWindow):
         n = int(self.air_npts.value())
         P = float(self.air_plot_p.value())
         if tmax <= tmin:
-            QMessageBox.warning(self, "Air Transport", "Tmax must exceed Tmin.")
+            self._warn("Air Transport", "Tmax must exceed Tmin.")
             return
         which = {0: "comparison", 1: "dry", 2: "humid"}[self.air_which.currentIndex()]
         kw = self._air_humidity_kwargs()
@@ -1256,7 +1467,7 @@ class StatThermoPyWindow(QMainWindow):
                 ax=ax, interactive=True, **kw,
             )
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Air Transport", f"Plot failed:\n{exc}")
+            self._fail("Air Transport: plot failed", exc)
             return
         self._air_transport_table = table
         self.air_canvas.refresh()
@@ -1280,8 +1491,7 @@ class StatThermoPyWindow(QMainWindow):
                 self.air_canvas.figure.savefig(path, dpi=120, bbox_inches="tight")
             else:
                 if self._air_transport_last is None:
-                    QMessageBox.warning(
-                        self, "Air Transport", "Compute a point evaluation first (Compute button).")
+                    self._warn("Air Transport", "Compute a point evaluation first (Compute button).")
                     return
                 meth = {"csv": "to_csv", "xlsx": "to_excel",
                         "json": "to_json", "pdf": "to_pdf"}[ext]
@@ -1290,7 +1500,7 @@ class StatThermoPyWindow(QMainWindow):
                     meth,
                 )(path)
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Air Transport", f"Export failed:\n{exc}")
+            self._fail("Air Transport: export failed", exc)
 
     def _build_validate_tab(self) -> QWidget:
         tab = QWidget()
@@ -1343,12 +1553,32 @@ class StatThermoPyWindow(QMainWindow):
         return tab
 
     def _build_menu(self) -> None:
+        """File / Tools / View / Help.
+
+        Export used to be a top-level menu of its own, which is not where anyone looks for it;
+        it now sits under File, where the rest of the file-oriented actions are. Only actions
+        backed by something that already exists are offered -- there is no stub here.
+        """
         mb = self.menuBar()
-        export = mb.addMenu("&Export")
         save_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton)
-        for fmt in ("csv", "json", "yaml", "excel", "latex"):
-            act = export.addAction(save_icon, fmt.upper())
+        file_menu = mb.addMenu("&File")
+        export = file_menu.addMenu(save_icon, "&Export results")
+        for fmt in ("html", "csv", "json", "yaml", "excel", "latex"):
+            act = export.addAction(fmt.upper())
             act.triggered.connect(lambda _checked=False, f=fmt: self._on_export(f))
+        file_menu.addSeparator()
+        quit_act = file_menu.addAction("E&xit")
+        quit_act.setShortcut(QKeySequence.Quit)
+        quit_act.triggered.connect(self.close)
+
+        tools = mb.addMenu("&Tools")
+        for label, index in (
+            ("Species database", 0),
+            ("Transport properties", 2),
+            ("Validation against references", 6),
+        ):
+            act = tools.addAction(label)
+            act.triggered.connect(lambda _checked=False, i=index: self._tabs.setCurrentIndex(i))
 
         view = mb.addMenu("&View")
         theme_menu = view.addMenu("Theme")
@@ -1362,6 +1592,47 @@ class StatThermoPyWindow(QMainWindow):
             theme_menu.addAction(act)
             self._theme_actions[key] = act
         self._theme_actions["System"].setChecked(True)
+        view.addSeparator()
+        reset_act = view.addAction("Reset layout")
+        reset_act.triggered.connect(self._on_reset_layout)
+
+        help_menu = mb.addMenu("&Help")
+        doc_act = help_menu.addAction("Documentation")
+        doc_act.setShortcut(QKeySequence.HelpContents)
+        doc_act.triggered.connect(self._on_documentation)
+        help_menu.addSeparator()
+        about_act = help_menu.addAction(f"About {APP_NAME}")
+        about_act.triggered.connect(self._on_about)
+
+    # ------------------------------------------------------------------ menu actions
+    def _on_about(self) -> None:
+        AboutDialog(self).exec()
+
+    def _on_documentation(self) -> None:
+        """Open the bundled offline manual, or say where it should be."""
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        here = Path(__file__).resolve()
+        for root in here.parents:
+            candidate = root / "Help.html"
+            if candidate.is_file():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(candidate)))
+                self.status(f"Opened {candidate.name}")
+                return
+        self._warn(
+            "Documentation not found",
+            "The offline manual Help.html is not present in this installation.",
+            detail=f"Looked for Help.html above {here.parent}",
+        )
+
+    def _on_reset_layout(self) -> None:
+        """Restore the opening geometry and the first tab."""
+        self._fit_to_screen(*self.DEFAULT_SIZE)
+        self._tabs.setCurrentIndex(0)
+        for splitter, sizes in self._default_splitter_sizes.items():
+            splitter.setSizes(sizes)
+        self.status("Layout reset")
 
     # ------------------------------------------------------------------ theming
     def _detect_theme(self) -> str:
@@ -1370,8 +1641,15 @@ class StatThermoPyWindow(QMainWindow):
         return "dark" if theme.detect_dark() else "light"
 
     def _set_icons(self, icons: dict) -> None:
+        # Validate has no honest match in the bundled artwork, so it takes the theme's own
+        # vector check glyph -- which also recolours with the palette, unlike the PNGs.
+        for i in range(self._tabs.count()):
+            if self._tabs.tabText(i) == "Validate":
+                self._tabs.setTabIcon(i, icons["check"])
         self.add_row_btn.setIcon(icons["plus"])
         self.del_row_btn.setIcon(icons["minus"])
+        self.normalize_btn.setIcon(icons["check"])
+        self.clear_mix_btn.setIcon(icons["minus"])
         self.compute_btn.setIcon(icons["check"])
         self.plot_btn.setIcon(icons["play"])
         self.val_btn.setIcon(icons["play"])
@@ -1432,6 +1710,258 @@ class StatThermoPyWindow(QMainWindow):
         effective = self._detect_theme() if choice == "System" else choice.lower()
         self._apply_theme(effective)
 
+    # ------------------------------------------------------------------ species panel
+    def _refresh_species_info(self) -> None:
+        """Summarise what the database holds for the selected species.
+
+        Only facts that are really in the record: no capability is implied that the molecule
+        does not declare, and a species without Lennard-Jones parameters says so here rather
+        than failing later on the Transport tab.
+        """
+        try:
+            mol = get(self.gas_combo.currentText())
+        except Exception:
+            self.species_info.setText("")
+            return
+        geometry = getattr(mol.geometry, "name", str(mol.geometry)).lower()
+        facts = [
+            f"{mol.formula} · {geometry} · {mol.n_atoms} atoms · σ = {mol.symmetry_number}",
+            f"M = {mol.molar_mass * 1e3:.4f} g/mol",
+            _plural(len(mol.vibrational_modes or ()), "vibrational mode"),
+        ]
+        if mol.internal_rotors:
+            facts.append(_plural(len(mol.internal_rotors), "hindered internal rotor"))
+        if mol.anharmonicity:
+            facts.append("anharmonic (Dunham)")
+        if mol.stockmayer:
+            facts.append("polar (Stockmayer)")
+        elif mol.lennard_jones:
+            facts.append("Lennard-Jones 12-6")
+        else:
+            facts.append("no transport parameters")
+        accuracy = mol.transport_accuracy
+        if accuracy is not None:
+            facts.append(
+                f"measured bands: μ ±{accuracy.viscosity_percent:g}%, "
+                f"k ±{accuracy.conductivity_percent:g}%"
+            )
+        self.species_info.setText("   ·   ".join(facts))
+
+    # ------------------------------------------------------------------ mixture editing
+    def _on_normalize_mixture(self) -> None:
+        """Scale the entered fractions so they sum to exactly 1, in place."""
+        spins = [self.mix_table.cellWidget(r, 1) for r in range(self.mix_table.rowCount())]
+        spins = [s for s in spins if s is not None]
+        total = sum(s.value() for s in spins)
+        if total <= 0.0:
+            self._warn("Nothing to normalize",
+                       "Give at least one species a positive fraction first.")
+            return
+        for spin in spins:
+            spin.setValue(spin.value() / total)
+        self._update_fraction_sum()
+        self.status("Composition normalized")
+
+    def _on_clear_mixture(self) -> None:
+        """Empty the composition table back to a single blank row."""
+        while self.mix_table.rowCount():
+            self.mix_table.removeRow(0)
+        self._add_mixture_row()
+        self.status("Composition cleared")
+
+    # ------------------------------------------------------------------ tables
+    def _install_table_behaviour(self) -> None:
+        """Give every results table the same manners, once, instead of per construction site.
+
+        None of the ten tables had an object name, none was copyable, and numbers were
+        left-aligned like prose, which makes columns of magnitudes impossible to scan. Naming
+        them from the attribute that holds them also means a test can find a table by the name
+        the code uses for it.
+        """
+        for name, widget in list(vars(self).items()):
+            if isinstance(widget, QTableWidget) and not widget.objectName():
+                widget.setObjectName(name)
+        for table in self.findChildren(QTableWidget):
+            if table is self.mix_table:
+                continue                      # the composition table is an input, not a result
+            table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            table.setSelectionBehavior(QAbstractItemView.SelectItems)
+            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+            table.setAlternatingRowColors(True)
+            table.setWordWrap(False)
+            table.verticalHeader().setVisible(False)
+            table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            # Stretch divides the viewport evenly, which truncates every header once a table
+            # has many columns ("Species" became "Specie:"). Past four columns, give each its
+            # content width and let the horizontal scrollbar do the work it is there for.
+            if table.columnCount() > 4:
+                table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+                table.horizontalHeader().setStretchLastSection(True)
+            table.itemChanged.connect(self._align_numeric_item)
+            copy = QShortcut(QKeySequence.Copy, table)
+            copy.setContext(Qt.WidgetWithChildrenShortcut)
+            copy.activated.connect(lambda t=table: self._copy_selection(t))
+
+    @staticmethod
+    def _align_numeric_item(item) -> None:
+        """Right-align any cell that holds a number, so magnitudes line up by decimal place."""
+        table = item.tableWidget()
+        if table is None:
+            return
+        text = item.text().strip()
+        if not text or text == "—":
+            return
+        try:
+            float(text)
+        except ValueError:
+            return
+        blocked = table.blockSignals(True)      # setTextAlignment re-emits itemChanged
+        item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        table.blockSignals(blocked)
+
+    def _copy_selection(self, table) -> None:
+        """Copy the selected cells as TSV, which pastes straight into a spreadsheet."""
+        ranges = table.selectedRanges()
+        if not ranges:
+            return
+        lines = []
+        for rng in ranges:
+            for row in range(rng.topRow(), rng.bottomRow() + 1):
+                cells = []
+                for col in range(rng.leftColumn(), rng.rightColumn() + 1):
+                    item = table.item(row, col)
+                    cells.append(item.text() if item else "")
+                lines.append("\t".join(cells))
+        QApplication.clipboard().setText("\n".join(lines))
+        n = sum(r.rowCount() * r.columnCount() for r in ranges)
+        self.status(f"Copied {n} cell{'s' if n != 1 else ''} to the clipboard")
+
+    # ------------------------------------------------------------------ status bar
+    def _build_status_bar(self) -> None:
+        """Transient messages on the left, the live state summary and identity on the right."""
+        bar = self.statusBar()
+        self._state_label = QLabel("")
+        self._state_label.setProperty("role", "hint")
+        bar.addPermanentWidget(self._state_label)
+        identity = QLabel(AFFILIATION_SHORT)
+        identity.setProperty("role", "hint")
+        bar.addPermanentWidget(identity)
+
+        # Keep the summary live: every state widget that can change it reports in.
+        for spin in (self.T_spin, self.P_spin, self.V_spin, self.n_spin, self.m_spin):
+            spin.valueChanged.connect(self._refresh_status_state)
+        for radio in (self.use_P, self.use_V, self.use_n, self.use_m,
+                      self.radio_pure, self.radio_mix):
+            radio.toggled.connect(self._refresh_status_state)
+        self.gas_combo.currentTextChanged.connect(self._refresh_status_state)
+        self._refresh_status_state()
+        self.status()
+
+    def status(self, message: str = "") -> None:
+        """Transient message on the left of the status bar; empty restores ``Ready``."""
+        self.statusBar().showMessage(message or "Ready")
+
+    def _refresh_status_state(self) -> None:
+        """Keep the permanent right-hand summary in step with the current inputs.
+
+        The state the next calculation will use was previously invisible until a result
+        appeared; showing it continuously means a wrong T or a half-entered composition is
+        caught before pressing Calculate, not after.
+        """
+        parts = [f"T = {self.T_spin.value():.2f} K"]
+        parts.append(
+            f"P = {self.P_spin.value():.6g} Pa" if self.use_P.isChecked()
+            else f"V = {self.V_spin.value():.6g} m³"
+        )
+        if self.radio_mix.isChecked():
+            rows = self.mix_table.rowCount()
+            active = sum(
+                1 for r in range(rows)
+                if self.mix_table.cellWidget(r, 1)
+                and self.mix_table.cellWidget(r, 1).value() > 0.0
+            )
+            parts.append(f"{active} species" if active != 1 else "1 species")
+        else:
+            parts.append(self.gas_combo.currentText() or "no species")
+        self._state_label.setText("   |   ".join(parts))
+
+    # ------------------------------------------------------------------ user feedback
+    def _warn(self, title: str, message: str, detail: str = "") -> None:
+        """A recoverable problem: what went wrong and what to do, never a stack trace."""
+        box = QMessageBox(QMessageBox.Warning, title, message, QMessageBox.Ok, self)
+        if detail:
+            box.setDetailedText(detail)
+        box.exec()
+        self.status(message)
+
+    def _fail(self, title: str, exc: Exception) -> None:
+        """An exception from the core, reported without putting the traceback in the user's face.
+
+        The message the core raised is usually the useful sentence, so it leads; the full
+        traceback goes behind *Show Details*, which is where a developer will look for it and
+        where an ordinary user will not trip over it.
+        """
+        import traceback
+
+        box = QMessageBox(QMessageBox.Critical, title, "The calculation could not be completed.",
+                          QMessageBox.Ok, self)
+        box.setInformativeText(f"Reason:\n{exc}")
+        box.setDetailedText("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        box.exec()
+        self.status(f"{title}: {exc}")
+
+    @contextmanager
+    def _busy(self, message: str):
+        """Show progress for the duration of a calculation.
+
+        The core runs synchronously inside the callback -- moving it to a worker thread would
+        be a much larger change than this task allows, and Qt widgets may only be touched from
+        the GUI thread. So rather than pretend to be asynchronous, make the wait legible: a
+        busy cursor, a status message, and the window repainted before the work starts.
+        """
+        self.status(message)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+        try:
+            yield
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _validate_state(self) -> str | None:
+        """Check the state inputs before calling the core; return a message, or None if valid.
+
+        Catching this here turns a raised ValueError from deep in ``State`` into a sentence
+        that names the field and the rule it broke.
+        """
+        if self.T_spin.value() <= 0.0:
+            return "Temperature must be greater than 0 K."
+        if self.use_P.isChecked() and self.P_spin.value() <= 0.0:
+            return "Pressure must be greater than 0 Pa."
+        if self.use_V.isChecked() and self.V_spin.value() <= 0.0:
+            return "Volume must be greater than 0 m³."
+        if self.use_n.isChecked() and self.n_spin.value() <= 0.0:
+            return "Amount of substance must be greater than 0 mol."
+        if self.use_m.isChecked() and self.m_spin.value() <= 0.0:
+            return "Mass must be greater than 0 kg."
+        return None
+
+    def _validate_composition(self) -> str | None:
+        """Check the mixture table; return a message, or None if it can be computed."""
+        if not self.radio_mix.isChecked():
+            return None
+        total = 0.0
+        for r in range(self.mix_table.rowCount()):
+            spin = self.mix_table.cellWidget(r, 1)
+            if spin is None:
+                continue
+            if spin.value() < 0.0:
+                return "Negative mole fractions are not allowed."
+            total += spin.value()
+        if total <= 0.0:
+            return "Mole fractions must satisfy Σx_i > 0: give at least one species a fraction."
+        return None
+
     # ------------------------------------------------------------------ helpers
     def _fit_to_screen(self, width: int, height: int) -> None:
         """Open at the preferred size, or at the largest size the display can actually show.
@@ -1468,7 +1998,7 @@ class StatThermoPyWindow(QMainWindow):
 
     @staticmethod
     def _make_spin(minv: float, maxv: float, val: float) -> QDoubleSpinBox:
-        sb = QDoubleSpinBox()
+        sb = _NumberSpin()
         sb.setRange(minv, maxv)
         sb.setDecimals(6)
         sb.setValue(val)
@@ -1631,34 +2161,40 @@ class StatThermoPyWindow(QMainWindow):
 
     # ------------------------------------------------------------------ actions
     def _on_compute(self) -> None:
-        state = self._make_state()
-        if state is None:  # pragma: no cover - T is always set via spinbox
-            QMessageBox.warning(self, "StatThermoPy", "Set a temperature.")
+        # Validate before calling the core, so a bad input is named as a field and a rule
+        # rather than surfacing as whatever exception the core happens to raise.
+        problem = self._validate_state() or self._validate_composition()
+        if problem:
+            self._warn("Check the inputs", problem)
             return
+        state = self._make_state()
         try:
-            if self.radio_pure.isChecked():
-                mol = self._current_molecule()
-                if mol is None:  # pragma: no cover - combo always has items
-                    QMessageBox.warning(self, "StatThermoPy", "Select a species.")
-                    return
-                res = Thermodynamics(mol, state).compute()
-                self._populate_results(res)
-                self._populate_modes(mol, state)
-                self.modes_box.setVisible(True)
-                self.components_box.setVisible(False)
-            else:
-                mix = self._build_mixture()
-                if mix is None:
-                    QMessageBox.warning(self, "StatThermoPy", "Add at least one mixture component.")
-                    return
-                res = mix.compute(state)
-                self._populate_results(res)
-                self._populate_components(res)
-                self.modes_box.setVisible(False)
-                self.components_box.setVisible(True)
+            with self._busy("Calculating…"):
+                if self.radio_pure.isChecked():
+                    mol = self._current_molecule()
+                    if mol is None:  # pragma: no cover - combo always has items
+                        self._warn("Check the inputs", "Select a species.")
+                        return
+                    res = Thermodynamics(mol, state).compute()
+                    self._populate_results(res)
+                    self._populate_modes(mol, state)
+                    self.modes_box.setVisible(True)
+                    self.components_box.setVisible(False)
+                else:
+                    mix = self._build_mixture()
+                    if mix is None:
+                        self._warn("Check the inputs",
+                                   "Add at least one species to the mixture.")
+                        return
+                    res = mix.compute(state)
+                    self._populate_results(res)
+                    self._populate_components(res)
+                    self.modes_box.setVisible(False)
+                    self.components_box.setVisible(True)
             self._last_result = res
+            self.status("Calculation completed")
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "StatThermoPy", f"Computation failed:\n{exc}")
+            self._fail("Calculation failed", exc)
 
     def _populate_results(self, res) -> None:
         # Every row is the same quantity on three bases: per mol, per kg and per m^3. The
@@ -1730,7 +2266,7 @@ class StatThermoPyWindow(QMainWindow):
         n = int(self.plot_npts.value())
         P = float(self.plot_p.value())
         if tmax <= tmin:
-            QMessageBox.warning(self, "StatThermoPy", "Tmax must exceed Tmin.")
+            self._warn("StatThermoPy", "Tmax must exceed Tmin.")
             return
         Ts = np.linspace(tmin, tmax, n)
         ax = self.plot_canvas.ax
@@ -1739,7 +2275,7 @@ class StatThermoPyWindow(QMainWindow):
         if self.radio_mix.isChecked():
             mix = self._build_mixture()
             if mix is None:
-                QMessageBox.warning(self, "StatThermoPy", "Add at least one mixture component.")
+                self._warn("StatThermoPy", "Add at least one mixture component.")
                 return
             if thermal:
                 plot_mixture_thermal_fields(mix, Ts, P=P, ax=ax)
@@ -1748,9 +2284,7 @@ class StatThermoPyWindow(QMainWindow):
         else:
             mol = self._current_molecule()
             if mol is None:  # pragma: no cover - combo always has items
-                QMessageBox.warning(
-                    self, "StatThermoPy", "Select a species on the Properties tab."
-                )
+                self._warn("StatThermoPy", "Select a species on the Properties tab.")
                 return
             if thermal:
                 plot_thermal_fields(mol, Ts, P=P, ax=ax)
@@ -1764,17 +2298,22 @@ class StatThermoPyWindow(QMainWindow):
         from ..transport import TRANSPORT_PROPS, TRANSPORT_UNITS, TransportCalculator
 
         name = self.transport_species.currentText()
-        mol = get(name)
         T = float(self.transport_T.value())
         P = float(self.transport_P.value())
+        if name == self.MIXTURE_CHOICE:
+            self._compute_mixture_transport(T, P)
+            return
+        mol = get(name)
         if not mol.has_lennard_jones:
-            QMessageBox.warning(self, "Transport",
-                                f"{name} has no Lennard–Jones parameters; cannot compute transport.")
+            self._warn("Transport unavailable",
+                       f"{name} has no Lennard–Jones parameters, so its transport "
+                       "properties cannot be computed from kinetic theory.",
+                       detail="Chapman–Enskog needs sigma and epsilon/k for the species.")
             return
         try:
             res = TransportCalculator(mol, State(T=T, P=P)).compute()
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Transport", f"Computation failed:\n{exc}")
+            self._fail("Transport: computation failed", exc)
             return
         self._transport_last = res
         data = res.as_dict()
@@ -1794,14 +2333,19 @@ class StatThermoPyWindow(QMainWindow):
         from ..transport import plots as tplots
 
         name = self.transport_species.currentText()
-        mol = get(name)
-        if not mol.has_lennard_jones:
-            QMessageBox.warning(self, "Transport",
-                                f"{name} has no Lennard–Jones parameters; cannot compute transport.")
-            return
         props = [it.text() for it in self.transport_props.selectedItems()]
         if not props:
-            QMessageBox.warning(self, "Transport", "Select at least one property.")
+            self._warn("Transport", "Select at least one property.")
+            return
+        if name == self.MIXTURE_CHOICE:
+            self._plot_mixture_transport(props)
+            return
+        mol = get(name)
+        if not mol.has_lennard_jones:
+            self._warn("Transport unavailable",
+                       f"{name} has no Lennard–Jones parameters, so its transport "
+                       "properties cannot be computed from kinetic theory.",
+                       detail="Chapman–Enskog needs sigma and epsilon/k for the species.")
             return
         mode = self.transport_mode.currentText()
         T_range = (float(self.transport_tmin.value()), float(self.transport_tmax.value()))
@@ -1815,10 +2359,9 @@ class StatThermoPyWindow(QMainWindow):
         else:  # vs T
             need_T, need_P = True, False
         if (need_T and T_range[0] >= T_range[1]) or (need_P and P_range[0] >= P_range[1]):
-            QMessageBox.warning(
-                self, "Transport",
-                "The swept axis must have max > min: Tmax>Tmin for 'vs T' / 2-D map, "
-                "Pmax>Pmin for 'vs P' / 2-D map.")
+            self._warn("Check the sweep range",
+                       "The swept axis must have max greater than min: Tmax > Tmin for "
+                       "'vs T' and the 2-D map, Pmax > Pmin for 'vs P' and the 2-D map.")
             return
         n = int(self.transport_npts.value())
         ax = self.transport_canvas.ax
@@ -1826,8 +2369,7 @@ class StatThermoPyWindow(QMainWindow):
         try:
             if mode == "2-D map":
                 if len(props) != 1:
-                    QMessageBox.warning(self, "Transport",
-                                       "2-D map uses a single property; plotting the first selection.")
+                    self._warn("Transport", "2-D map uses a single property; plotting the first selection.")
                     props = props[:1]
                 tplots.plot_transport_map(mol, props[0], T_range, P_range, n=n, ax=ax)
                 self._transport_map = (props[0], T_range, P_range, n)
@@ -1847,7 +2389,7 @@ class StatThermoPyWindow(QMainWindow):
                     tplots.plot_transport_multi(mol, props, Ts, P=P_range[0], ax=ax)
                 self._transport_map = None
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Transport", f"Plot failed:\n{exc}")
+            self._fail("Transport: plot failed", exc)
             return
         self.transport_canvas.refresh()
         self.transport_status.setText(
@@ -1874,8 +2416,7 @@ class StatThermoPyWindow(QMainWindow):
                 self.transport_canvas.figure.savefig(path, bbox_inches="tight")
             elif ext == "dat":
                 if self._transport_map is None:
-                    QMessageBox.warning(self, "Transport",
-                                        "Tecplot export requires a 2-D map. Plot a map first.")
+                    self._warn("Transport", "Tecplot export requires a 2-D map. Plot a map first.")
                     return
                 prop, T_range, P_range, n = self._transport_map
                 import numpy as np
@@ -1895,11 +2436,10 @@ class StatThermoPyWindow(QMainWindow):
                     else:
                         Exporter(self._transport_last).to_excel(path)
                 else:
-                    QMessageBox.warning(self, "Transport",
-                                        "Compute a point evaluation first (Compute button).")
+                    self._warn("Transport", "Compute a point evaluation first (Compute button).")
                     return
         except Exception as exc:  # pragma: no cover - GUI error path
-            QMessageBox.critical(self, "Transport", f"Export failed:\n{exc}")
+            self._fail("Transport: export failed", exc)
 
     def _on_validate(self) -> None:
         species = self.val_species.currentText()
@@ -1907,7 +2447,7 @@ class StatThermoPyWindow(QMainWindow):
         try:
             report = validate(species, prop)
         except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "StatThermoPy", f"Validation failed:\n{exc}")
+            self._fail("StatThermoPy: validation failed", exc)
             return
         self.val_table.setRowCount(len(report.T))
         for i, (T, pred, ref, err) in enumerate(
@@ -1950,16 +2490,44 @@ class StatThermoPyWindow(QMainWindow):
             self._on_compute()
             res = self._last_result
         if res is None:  # pragma: no cover - compute always succeeds with valid selection
-            QMessageBox.warning(self, "StatThermoPy", "Nothing to export; run Compute first.")
+            self._warn("StatThermoPy", "Nothing to export; run Compute first.")
             return
-        ext = {"csv": "csv", "json": "json", "yaml": "yaml", "excel": "xlsx", "latex": "tex"}[fmt]
+        ext = {"html": "html", "csv": "csv", "json": "json", "yaml": "yaml",
+               "excel": "xlsx", "latex": "tex"}[fmt]
         path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", f"statthermopy.{ext}")
         if not path:  # pragma: no cover - user cancelled dialog
             return
         try:
-            getattr(Exporter(res), f"to_{fmt}")(path)
+            written = getattr(Exporter(res), f"to_{fmt}")(path)
         except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "StatThermoPy", f"Export failed:\n{exc}")
+            self._fail("StatThermoPy: export failed", exc)
+            return
+        self.status(f"Export completed: {written}")
+
+
+class _NumberSpin(QDoubleSpinBox):
+    """A spin box that keeps six decimals of precision without displaying six decimals.
+
+    Qt pads its text out to ``decimals()``, so a pressure of 101325 Pa was drawn as
+    ``101325,000000`` -- six characters of noise on every state field, and enough extra width
+    to push the panes apart on a narrow window. Trailing zeros are dropped for display only:
+    the stored value, the step behaviour and typed input are all unchanged, and a value that
+    really needs six decimals still shows them.
+    """
+
+    def textFromValue(self, value: float) -> str:
+        text = super().textFromValue(value)
+        point = self.locale().decimalPoint()
+        if point not in text:
+            return text
+        head, _, tail = text.rpartition(point)
+        tail = tail.rstrip("0")
+        return f"{head}{point}{tail}" if tail else head
+
+
+def _plural(n: int, noun: str) -> str:
+    """``3 vibrational modes`` / ``1 vibrational mode`` -- captions are read, so they must read."""
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 def _massic_for(molar_key: str) -> str | None:
